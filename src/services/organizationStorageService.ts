@@ -1,5 +1,6 @@
 import type {
   ChangeLog,
+  DisplayMode,
   OrganizationBackup,
   OrganizationPosition,
   Session,
@@ -10,6 +11,9 @@ const HISTORY_KEY = "paysandu_organogram_history_v1";
 const SESSION_KEY = "paysandu_organogram_session_v1";
 const BACKUP_KEY = "paysandu_organogram_backup_v1";
 const META_KEY = "paysandu_organogram_meta_v1";
+const DISPLAY_MODE_KEY = "paysandu_organogram_display_mode_v1";
+
+const DISPLAY_MODES: DisplayMode[] = ["title-name", "title", "name"];
 
 const HISTORY_LIMIT = 500;
 
