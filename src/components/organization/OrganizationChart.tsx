@@ -7,7 +7,6 @@ import {
   type Edge,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import dagre from "dagre";
 import {
   ChevronsDownUp,
   ChevronsUpDown,
@@ -15,6 +14,7 @@ import {
   Maximize,
   Minimize,
   Plus,
+  Printer,
   Search,
   ZoomIn,
   ZoomOut,
@@ -30,12 +30,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { layoutHierarchy } from "@/lib/chartLayout";
 import {
   categorizePositions,
+  displayModeLabel,
+  formatDateTime,
   listAreas,
   safePositions,
 } from "@/lib/organization";
-import type { OrganizationPosition } from "@/types/organization";
+import { cn } from "@/lib/utils";
+import { getDisplayMode, saveDisplayMode } from "@/services/organizationStorageService";
+import type { DisplayMode, OrganizationPosition } from "@/types/organization";
 import {
   NODE_HEIGHT,
   NODE_WIDTH,
@@ -47,11 +52,16 @@ export const EMPTY_AREA_TOKEN = "__sem_area__";
 
 const nodeTypes = { position: PositionNode };
 
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 interface OrganizationChartProps {
   positions: OrganizationPosition[];
   initialArea?: string;
   onEdit: (id: string) => void;
   onCreate: () => void;
+  onOpenProfile: (id: string) => void;
   onMarkVacant: (id: string) => void;
   onDeactivate: (id: string) => void;
   onOrphanCountChange?: (count: number) => void;
@@ -72,6 +82,7 @@ function ChartInner({
   initialArea,
   onEdit,
   onCreate,
+  onOpenProfile,
   onMarkVacant,
   onDeactivate,
   onOrphanCountChange,
@@ -82,8 +93,10 @@ function ChartInner({
   const [search, setSearch] = useState("");
   const [areaFilter, setAreaFilter] = useState<string>(initialArea ?? "all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [displayMode, setDisplayMode] = useState<DisplayMode>(() => getDisplayMode());
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   useEffect(() => {
     if (initialArea) setAreaFilter(initialArea);
@@ -97,11 +110,19 @@ function ChartInner({
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
 
+  useEffect(() => {
+    function afterPrint() {
+      setIsPrinting(false);
+    }
+    window.addEventListener("afterprint", afterPrint);
+    return () => window.removeEventListener("afterprint", afterPrint);
+  }, []);
+
   const list = safePositions(positions);
   const areas = useMemo(() => listAreas(list), [list]);
   const hasEmptyArea = useMemo(() => list.some((p) => !(p.area ?? "").trim()), [list]);
 
-  const { categorized, matchIds, filtering } = useMemo(() => {
+  const { categorized, matchIds } = useMemo(() => {
     const categorizedResult = categorizePositions(list);
     const filteringActive = areaFilter !== "all" || statusFilter !== "all";
     const query = search.trim().toLowerCase();
@@ -128,9 +149,15 @@ function ChartInner({
     });
   }, []);
 
+  function changeDisplayMode(mode: DisplayMode) {
+    setDisplayMode(mode);
+    saveDisplayMode(mode);
+  }
+
   const { nodes, edges, signature } = useMemo(() => {
     const { orphanIds } = categorized;
     const index = new Map(list.map((p) => [p.id, p]));
+    const filtering = areaFilter !== "all" || statusFilter !== "all";
 
     const matchesFilter = (p: OrganizationPosition) => {
       if (areaFilter !== "all") {
@@ -202,8 +229,10 @@ function ChartInner({
         collapsed: collapsed.has(p.id),
         highlighted: matchIds.has(p.id),
         dimmed: searching && matchIds.size > 0 && !matchIds.has(p.id),
+        displayMode,
         onToggle: toggleCollapse,
         onEdit,
+        onOpenProfile,
         onMarkVacant,
         onDeactivate,
       },
@@ -222,22 +251,17 @@ function ChartInner({
       });
     }
 
-    // Layout com dagre.
-    const g = new dagre.graphlib.Graph();
-    g.setGraph({ rankdir: "TB", nodesep: 42, ranksep: 96, marginx: 24, marginy: 24 });
-    g.setDefaultEdgeLabel(() => ({}));
-    for (const node of flowNodes) g.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
-    for (const edge of flowEdges) g.setEdge(edge.source, edge.target);
-    dagre.layout(g);
-
+    // Layout hierárquico: profundidade pela cadeia de superiores; irmãos no
+    // mesmo nível, quebrando em linhas quando há muitos subordinados.
+    const layout = layoutHierarchy(visible, parentOf, NODE_WIDTH, NODE_HEIGHT);
     for (const node of flowNodes) {
-      const laidOut = g.node(node.id);
-      node.position = { x: laidOut.x - NODE_WIDTH / 2, y: laidOut.y - NODE_HEIGHT / 2 };
+      const laidOut = layout.get(node.id);
+      if (laidOut) node.position = laidOut;
     }
 
-    const sig = `${flowNodes.length}:${flowEdges.length}:${areaFilter}:${statusFilter}:${Array.from(collapsed).join(",")}`;
+    const sig = `${flowNodes.length}:${flowEdges.length}:${areaFilter}:${statusFilter}:${displayMode}:${Array.from(collapsed).join(",")}`;
     return { nodes: flowNodes, edges: flowEdges, signature: sig };
-  }, [categorized, list, filtering, areaFilter, statusFilter, collapsed, matchIds, search, toggleCollapse, onEdit, onMarkVacant, onDeactivate]);
+  }, [categorized, list, areaFilter, statusFilter, displayMode, collapsed, matchIds, search, toggleCollapse, onEdit, onOpenProfile, onMarkVacant, onDeactivate]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -271,10 +295,42 @@ function ChartInner({
     }
   }
 
+  /**
+   * Prepara o organograma para impressão: expande todos os níveis, ajusta a
+   * moldura ao tamanho da página (paisagem), aguarda o enquadramento e só
+   * então abre a caixa de impressão.
+   */
+  async function handlePrint() {
+    setCollapsed(new Set());
+    setIsPrinting(true);
+    await wait(450); // novo layout renderizado
+    reactFlow.fitView({ padding: 0.06, maxZoom: 1 });
+    await wait(200); // enquadramento aplicado
+    window.print();
+  }
+
+  const printAreaLabel =
+    areaFilter === "all"
+      ? "Todas as áreas"
+      : areaFilter === EMPTY_AREA_TOKEN
+        ? "Sem área definida"
+        : areaFilter;
+
   return (
     <div className="flex flex-col gap-3">
+      {/* Cabeçalho exibido apenas na impressão */}
+      <div className="print-only mb-2">
+        <h1 className="text-xl font-bold tracking-tight text-foreground">
+          Organograma Institucional — Paysandu Sport Club
+        </h1>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Modo de visualização: {displayModeLabel(displayMode)} • Área: {printAreaLabel} • Impresso
+          em {formatDateTime(new Date().toISOString())}
+        </p>
+      </div>
+
       {/* Barra de ferramentas */}
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-3">
+      <div className="no-print flex flex-wrap items-center gap-2 rounded-lg border bg-card p-3">
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -310,6 +366,17 @@ function ChartInner({
             <SelectItem value="occupied">Ocupado</SelectItem>
             <SelectItem value="vacant">Vago</SelectItem>
             <SelectItem value="inactive">Inativo</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={displayMode} onValueChange={(value) => changeDisplayMode(value as DisplayMode)}>
+          <SelectTrigger className="w-44" aria-label="Modo de visualização dos cartões">
+            <SelectValue placeholder="Modo de visualização" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="title-name">Cargo + Nome</SelectItem>
+            <SelectItem value="title">Somente cargo</SelectItem>
+            <SelectItem value="name">Somente nome</SelectItem>
           </SelectContent>
         </Select>
 
@@ -354,6 +421,16 @@ function ChartInner({
           >
             {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void handlePrint()}
+            disabled={isPrinting}
+            aria-label="Imprimir organograma"
+          >
+            <Printer className="h-4 w-4" />
+            {isPrinting ? "Preparando…" : "Imprimir"}
+          </Button>
           <Button size="sm" onClick={onCreate}>
             <Plus className="h-4 w-4" />
             Novo cargo
@@ -364,7 +441,10 @@ function ChartInner({
       {/* Área do gráfico */}
       <div
         ref={fullscreenRef}
-        className="h-[68vh] min-h-[420px] overflow-hidden rounded-lg border bg-card"
+        className={cn(
+          "overflow-hidden rounded-lg border bg-card",
+          isPrinting ? "h-[700px] w-[1040px] max-w-full" : "h-[68vh] min-h-[420px]",
+        )}
       >
         <ReactFlow
           nodes={nodes}
