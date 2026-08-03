@@ -2,10 +2,15 @@ export type ConnectionType = "direct" | "functional" | "undefined";
 
 export type PositionStatus = "occupied" | "vacant" | "inactive";
 
+/** Modos de exibição dos cartões do organograma. */
+export type DisplayMode = "title-name" | "title" | "name";
+
 export interface OrganizationPosition {
   id: string;
   legacyId: number;
   personName: string;
+  /** Foto do colaborador (data URL comprimida ou URL futura do backend). */
+  photoUrl?: string;
   positionTitle: string;
   superiorId: string | null;
   connectionType: ConnectionType;
