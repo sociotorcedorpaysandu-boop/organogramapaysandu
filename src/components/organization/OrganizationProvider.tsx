@@ -23,6 +23,7 @@ import type { ChangeAction, ChangeLog, OrganizationPosition } from "@/types/orga
 
 export interface PositionInput {
   personName: string;
+  photoUrl: string;
   positionTitle: string;
   superiorId: string | null;
   connectionType: OrganizationPosition["connectionType"];
@@ -72,7 +73,10 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       stored = initialPositions;
       storage.savePositions(stored);
     }
-    setPositions(safePositions(stored));
+    // Migração segura: adiciona photoUrl a registros antigos sem apagar dados.
+    const migration = storage.migratePositions(safePositions(stored));
+    if (migration.migrated) storage.savePositions(migration.positions);
+    setPositions(migration.positions);
     setHistory(storage.getHistory());
     setLastUpdated(storage.getLastUpdated());
     setBackupCreatedAt(storage.getBackup()?.createdAt ?? null);
@@ -121,6 +125,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
         id: newPositionId(),
         legacyId: maxLegacy + 1,
         personName: input.personName.trim(),
+        photoUrl: input.photoUrl,
         positionTitle: input.positionTitle.trim(),
         superiorId: input.superiorId,
         connectionType: input.connectionType,
@@ -156,6 +161,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       const updated: OrganizationPosition = {
         ...current,
         personName: input.personName.trim(),
+        photoUrl: input.photoUrl,
         positionTitle: input.positionTitle.trim(),
         superiorId: input.superiorId,
         connectionType: input.connectionType,
@@ -208,6 +214,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       const updated: OrganizationPosition = {
         ...current,
         personName: "",
+        photoUrl: "",
         status: "vacant",
         updatedAt: new Date().toISOString(),
       };
