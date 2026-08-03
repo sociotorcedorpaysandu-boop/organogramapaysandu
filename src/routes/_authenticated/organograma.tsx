@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Network, Pencil } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -43,6 +43,7 @@ export const Route = createFileRoute("/_authenticated/organograma")({
 function OrganizationChartPage() {
   const { positions, isLoading, markAsVacant, deactivatePosition } = useOrganization();
   const { area } = Route.useSearch();
+  const navigate = useNavigate();
 
   const [panelOpen, setPanelOpen] = useState(false);
   const [editing, setEditing] = useState<OrganizationPosition | null>(null);
@@ -86,6 +87,7 @@ function OrganizationChartPage() {
         initialArea={area}
         onEdit={openEdit}
         onCreate={openCreate}
+        onOpenProfile={(id) => navigate({ to: "/colaborador/$id", params: { id } })}
         onMarkVacant={markAsVacant}
         onDeactivate={deactivatePosition}
       />
