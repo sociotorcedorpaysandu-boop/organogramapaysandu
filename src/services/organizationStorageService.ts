@@ -146,6 +146,17 @@ export function clearData(): void {
   window.localStorage.removeItem(BACKUP_KEY);
 }
 
+/* Preferência de exibição do organograma */
+
+export function getDisplayMode(): DisplayMode {
+  const value = readJson<string>(DISPLAY_MODE_KEY, "title-name");
+  return DISPLAY_MODES.includes(value as DisplayMode) ? (value as DisplayMode) : "title-name";
+}
+
+export function saveDisplayMode(mode: DisplayMode): void {
+  writeJson(DISPLAY_MODE_KEY, mode);
+}
+
 /* Sessão (simulada) */
 
 export function getSession(): Session | null {
