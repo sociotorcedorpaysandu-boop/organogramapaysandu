@@ -1,4 +1,9 @@
-import type { ConnectionType, OrganizationPosition, PositionStatus } from "@/types/organization";
+import type {
+  ConnectionType,
+  DisplayMode,
+  OrganizationPosition,
+  PositionStatus,
+} from "@/types/organization";
 
 export const MAX_HIERARCHY_DEPTH = 1000;
 
@@ -195,6 +200,12 @@ export function statusLabel(status: PositionStatus): string {
   if (status === "occupied") return "Ocupado";
   if (status === "vacant") return "Vago";
   return "Inativo";
+}
+
+export function displayModeLabel(mode: DisplayMode): string {
+  if (mode === "title") return "Somente cargo";
+  if (mode === "name") return "Somente nome";
+  return "Cargo + Nome";
 }
 
 export function positionDisplayName(position: OrganizationPosition): string {
