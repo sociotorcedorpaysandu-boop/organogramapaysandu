@@ -19,6 +19,7 @@ import { Route as AuthenticatedImportarExportarRouteImport } from './routes/_aut
 import { Route as AuthenticatedOrganogramaRouteImport } from './routes/_authenticated/organograma'
 import { Route as AuthenticatedPessoasCargosRouteImport } from './routes/_authenticated/pessoas-cargos'
 import { Route as AuthenticatedVisaoGeralRouteImport } from './routes/_authenticated/visao-geral'
+import { Route as ColaboradorIdRouteImport } from './routes/colaborador.$id'
 
 const SplatRoute = SplatRouteImport.update({
   id: '/$',
@@ -72,6 +73,11 @@ const AuthenticatedVisaoGeralRoute = AuthenticatedVisaoGeralRouteImport.update({
   path: '/visao-geral',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ColaboradorIdRoute = ColaboradorIdRouteImport.update({
+  id: '/colaborador/$id',
+  path: '/colaborador/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
@@ -83,6 +89,7 @@ export interface FileRoutesByFullPath {
   '/organograma': typeof AuthenticatedOrganogramaRoute
   '/pessoas-cargos': typeof AuthenticatedPessoasCargosRoute
   '/visao-geral': typeof AuthenticatedVisaoGeralRoute
+  '/colaborador/$id': typeof ColaboradorIdRoute
 }
 export interface FileRoutesByTo {
   '/$': typeof SplatRoute
@@ -93,6 +100,7 @@ export interface FileRoutesByTo {
   '/organograma': typeof AuthenticatedOrganogramaRoute
   '/pessoas-cargos': typeof AuthenticatedPessoasCargosRoute
   '/visao-geral': typeof AuthenticatedVisaoGeralRoute
+  '/colaborador/$id': typeof ColaboradorIdRoute
   '/': typeof AuthenticatedIndexRoute
 }
 export interface FileRoutesById {
@@ -106,6 +114,7 @@ export interface FileRoutesById {
   '/_authenticated/organograma': typeof AuthenticatedOrganogramaRoute
   '/_authenticated/pessoas-cargos': typeof AuthenticatedPessoasCargosRoute
   '/_authenticated/visao-geral': typeof AuthenticatedVisaoGeralRoute
+  '/colaborador/$id': typeof ColaboradorIdRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
 }
 export interface FileRouteTypes {
@@ -120,6 +129,7 @@ export interface FileRouteTypes {
     | '/organograma'
     | '/pessoas-cargos'
     | '/visao-geral'
+    | '/colaborador/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/$'
@@ -130,6 +140,7 @@ export interface FileRouteTypes {
     | '/organograma'
     | '/pessoas-cargos'
     | '/visao-geral'
+    | '/colaborador/$id'
     | '/'
   id:
     | '__root__'
@@ -142,6 +153,7 @@ export interface FileRouteTypes {
     | '/_authenticated/organograma'
     | '/_authenticated/pessoas-cargos'
     | '/_authenticated/visao-geral'
+    | '/colaborador/$id'
     | '/_authenticated/'
   fileRoutesById: FileRoutesById
 }
@@ -149,6 +161,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   SplatRoute: typeof SplatRoute
   LoginRoute: typeof LoginRoute
+  ColaboradorIdRoute: typeof ColaboradorIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -223,6 +236,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedVisaoGeralRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/colaborador/$id': {
+      id: '/colaborador/$id'
+      path: '/colaborador/$id'
+      fullPath: '/colaborador/$id'
+      preLoaderRoute: typeof ColaboradorIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -253,17 +273,8 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   SplatRoute: SplatRoute,
   LoginRoute: LoginRoute,
+  ColaboradorIdRoute: ColaboradorIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

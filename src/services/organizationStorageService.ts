@@ -1,5 +1,6 @@
 import type {
   ChangeLog,
+  DisplayMode,
   OrganizationBackup,
   OrganizationPosition,
   Session,
@@ -10,6 +11,9 @@ const HISTORY_KEY = "paysandu_organogram_history_v1";
 const SESSION_KEY = "paysandu_organogram_session_v1";
 const BACKUP_KEY = "paysandu_organogram_backup_v1";
 const META_KEY = "paysandu_organogram_meta_v1";
+const DISPLAY_MODE_KEY = "paysandu_organogram_display_mode_v1";
+
+const DISPLAY_MODES: DisplayMode[] = ["title-name", "title", "name"];
 
 const HISTORY_LIMIT = 500;
 
@@ -38,6 +42,23 @@ function writeJson(key: string, value: unknown): void {
 }
 
 /* Posições */
+
+/**
+ * Migração segura: garante que registros antigos (sem foto) recebam
+ * `photoUrl` sem apagar nenhum dado existente.
+ */
+export function migratePositions(positions: OrganizationPosition[]): {
+  positions: OrganizationPosition[];
+  migrated: boolean;
+} {
+  let migrated = false;
+  const next = positions.map((position) => {
+    if (typeof position.photoUrl === "string") return position;
+    migrated = true;
+    return { ...position, photoUrl: position.photoUrl ?? "" };
+  });
+  return { positions: next, migrated };
+}
 
 export function getPositions(): OrganizationPosition[] | null {
   if (!isBrowser()) return null;
@@ -123,6 +144,17 @@ export function clearData(): void {
   window.localStorage.removeItem(HISTORY_KEY);
   window.localStorage.removeItem(META_KEY);
   window.localStorage.removeItem(BACKUP_KEY);
+}
+
+/* Preferência de exibição do organograma */
+
+export function getDisplayMode(): DisplayMode {
+  const value = readJson<string>(DISPLAY_MODE_KEY, "title-name");
+  return DISPLAY_MODES.includes(value as DisplayMode) ? (value as DisplayMode) : "title-name";
+}
+
+export function saveDisplayMode(mode: DisplayMode): void {
+  writeJson(DISPLAY_MODE_KEY, mode);
 }
 
 /* Sessão (simulada) */

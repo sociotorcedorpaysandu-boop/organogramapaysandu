@@ -60,19 +60,19 @@
 :root {
   --radius: 0.625rem;
   --background: oklch(0.982 0.004 240);
-  --foreground: oklch(0.26 0.045 252);
+  --foreground: oklch(0.32 0.032 250);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.26 0.045 252);
+  --card-foreground: oklch(0.32 0.032 250);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.26 0.045 252);
-  --primary: oklch(0.372 0.075 251);
-  --primary-foreground: oklch(0.97 0.01 240);
-  --secondary: oklch(0.95 0.01 240);
-  --secondary-foreground: oklch(0.34 0.06 251);
+  --popover-foreground: oklch(0.32 0.032 250);
+  --primary: oklch(0.52 0.135 247);
+  --primary-foreground: oklch(0.98 0.008 240);
+  --secondary: oklch(0.95 0.012 235);
+  --secondary-foreground: oklch(0.42 0.09 248);
   --muted: oklch(0.955 0.008 240);
-  --muted-foreground: oklch(0.5 0.028 250);
-  --accent: oklch(0.93 0.028 228);
-  --accent-foreground: oklch(0.32 0.07 250);
+  --muted-foreground: oklch(0.5 0.024 250);
+  --accent: oklch(0.935 0.038 224);
+  --accent-foreground: oklch(0.44 0.1 248);
   --destructive: oklch(0.577 0.215 27.325);
   --destructive-foreground: oklch(0.985 0.005 240);
   --success: oklch(0.58 0.115 168);
@@ -81,20 +81,20 @@
   --warning-foreground: oklch(0.27 0.05 72);
   --border: oklch(0.907 0.01 243);
   --input: oklch(0.907 0.01 243);
-  --ring: oklch(0.55 0.09 243);
-  --chart-1: oklch(0.55 0.11 245);
-  --chart-2: oklch(0.7 0.12 225);
-  --chart-3: oklch(0.4 0.07 250);
-  --chart-4: oklch(0.8 0.09 210);
+  --ring: oklch(0.6 0.11 243);
+  --chart-1: oklch(0.55 0.13 245);
+  --chart-2: oklch(0.72 0.11 227);
+  --chart-3: oklch(0.6 0.1 240);
+  --chart-4: oklch(0.82 0.08 210);
   --chart-5: oklch(0.58 0.115 168);
-  --sidebar: oklch(0.272 0.058 252);
-  --sidebar-foreground: oklch(0.93 0.015 235);
-  --sidebar-primary: oklch(0.72 0.11 227);
-  --sidebar-primary-foreground: oklch(0.98 0.005 240);
-  --sidebar-accent: oklch(0.345 0.062 251);
-  --sidebar-accent-foreground: oklch(0.96 0.01 240);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.72 0.11 227);
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.36 0.03 250);
+  --sidebar-primary: oklch(0.52 0.135 247);
+  --sidebar-primary-foreground: oklch(0.98 0.008 240);
+  --sidebar-accent: oklch(0.94 0.036 224);
+  --sidebar-accent-foreground: oklch(0.44 0.11 248);
+  --sidebar-border: oklch(0.91 0.01 243);
+  --sidebar-ring: oklch(0.6 0.11 243);
 }
 
 .dark {
@@ -145,5 +145,43 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
+  }
+}
+
+/*
+ * Impressão do organograma.
+ * .no-print  → oculto na impressão (menus, filtros, botões, controles).
+ * .print-only → visível apenas na impressão (cabeçalho com título/data/modo).
+ */
+.print-only {
+  display: none !important;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+  }
+
+  /* Grade de pontos do React Flow não vai para o papel */
+  .react-flow__background {
+    display: none !important;
+  }
+
+  .react-flow__node {
+    break-inside: avoid;
+  }
+
+  @page {
+    size: landscape;
+    margin: 10mm;
   }
 }

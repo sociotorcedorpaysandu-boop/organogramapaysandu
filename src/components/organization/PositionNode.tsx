@@ -1,6 +1,7 @@
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
-import { ChevronDown, ChevronUp, MoreHorizontal, Pencil, UserX, Ban } from "lucide-react";
+import { ChevronDown, ChevronUp, IdCard, MoreHorizontal, Pencil, UserX, Ban } from "lucide-react";
 
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -8,8 +9,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { personInitials } from "@/lib/photo";
 import { cn } from "@/lib/utils";
-import type { OrganizationPosition } from "@/types/organization";
+import type { DisplayMode, OrganizationPosition } from "@/types/organization";
 
 export interface PositionNodeData extends Record<string, unknown> {
   position: OrganizationPosition;
@@ -17,8 +19,10 @@ export interface PositionNodeData extends Record<string, unknown> {
   collapsed: boolean;
   highlighted: boolean;
   dimmed: boolean;
+  displayMode: DisplayMode;
   onToggle: (id: string) => void;
   onEdit: (id: string) => void;
+  onOpenProfile: (id: string) => void;
   onMarkVacant: (id: string) => void;
   onDeactivate: (id: string) => void;
 }
@@ -28,17 +32,32 @@ export type PositionFlowNode = Node<PositionNodeData, "position">;
 export const NODE_WIDTH = 250;
 export const NODE_HEIGHT = 118;
 
+function PersonAvatar({ position, size }: { position: OrganizationPosition; size: string }) {
+  const photo = (position.photoUrl ?? "").trim();
+  return (
+    <Avatar className={cn("shrink-0 border border-border", size)}>
+      {photo ? <AvatarImage src={photo} alt={position.personName || "Foto do colaborador"} /> : null}
+      <AvatarFallback className="bg-accent text-[10px] font-bold text-accent-foreground">
+        {personInitials(position.personName)}
+      </AvatarFallback>
+    </Avatar>
+  );
+}
+
 export function PositionNode({ data }: NodeProps<PositionFlowNode>) {
-  const { position, childrenCount, collapsed, highlighted, dimmed } = data;
+  const { position, childrenCount, collapsed, highlighted, dimmed, displayMode } = data;
   const isVacant = position.status === "vacant";
   const isInactive = position.status === "inactive";
   const person = (position.personName ?? "").trim();
+  const showTitle = displayMode !== "name";
+  const showPerson = displayMode !== "title";
 
   return (
     <div
       className={cn(
         "relative rounded-lg border bg-card px-3.5 py-3 text-left shadow-sm transition-opacity",
         "w-[250px] min-h-[118px]",
+        displayMode !== "title-name" && "flex flex-col justify-center",
         isVacant && "border-dashed border-muted-foreground/50 bg-muted/40",
         isInactive && "opacity-60",
         highlighted && "ring-2 ring-primary border-primary",
@@ -49,9 +68,13 @@ export function PositionNode({ data }: NodeProps<PositionFlowNode>) {
       <Handle type="target" position={Position.Top} className="!bg-border" />
 
       <div className="flex items-start justify-between gap-2">
-        <p className="text-[13px] font-bold uppercase leading-snug tracking-wide text-foreground">
-          {position.positionTitle || "Cargo não definido"}
-        </p>
+        {showTitle ? (
+          <p className="text-[13px] font-bold uppercase leading-snug tracking-wide text-foreground">
+            {position.positionTitle || "Cargo não definido"}
+          </p>
+        ) : (
+          <span />
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -69,6 +92,10 @@ export function PositionNode({ data }: NodeProps<PositionFlowNode>) {
               <Pencil className="h-4 w-4" />
               Editar
             </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => data.onOpenProfile(position.id)}>
+              <IdCard className="h-4 w-4" />
+              Abrir perfil
+            </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => data.onMarkVacant(position.id)}>
               <UserX className="h-4 w-4" />
               Marcar como cargo vago
@@ -81,14 +108,20 @@ export function PositionNode({ data }: NodeProps<PositionFlowNode>) {
         </DropdownMenu>
       </div>
 
-      <p
-        className={cn(
-          "mt-1 truncate text-sm",
-          isVacant ? "font-semibold text-warning" : "text-foreground/90",
-        )}
-      >
-        {isVacant ? "CARGO VAGO" : person || "—"}
-      </p>
+      {showPerson ? (
+        <div className="mt-1 flex items-center gap-2">
+          <PersonAvatar position={position} size={displayMode === "name" ? "h-9 w-9" : "h-7 w-7"} />
+          <p
+            className={cn(
+              "truncate",
+              displayMode === "name" ? "text-sm font-semibold" : "text-sm",
+              isVacant ? "font-semibold text-warning" : "text-foreground/90",
+            )}
+          >
+            {isVacant ? "CARGO VAGO" : person || "—"}
+          </p>
+        </div>
+      ) : null}
 
       <div className="mt-1.5 flex items-center gap-2 text-[11px] text-muted-foreground">
         <span className="truncate">{position.area?.trim() || "Sem área"}</span>

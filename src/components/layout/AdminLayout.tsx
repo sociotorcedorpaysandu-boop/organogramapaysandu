@@ -140,11 +140,11 @@ export function AdminLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
       {/* Sidebar fixa (desktop) */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 lg:block">
+      <aside className="fixed inset-y-0 left-0 z-30 no-print hidden w-64 lg:block">
         <SidebarContent />
       </aside>
 
-      <div className="flex min-h-screen flex-col lg:pl-64">
+      <div className="flex min-h-screen flex-col print:pl-0 lg:pl-64">
         <header className="sticky top-0 z-20 border-b bg-card/95 backdrop-blur">
           <div className="flex h-16 items-center gap-3 px-4 sm:px-6">
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
