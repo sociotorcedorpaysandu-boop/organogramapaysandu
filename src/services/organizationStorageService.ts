@@ -43,6 +43,23 @@ function writeJson(key: string, value: unknown): void {
 
 /* Posições */
 
+/**
+ * Migração segura: garante que registros antigos (sem foto) recebam
+ * `photoUrl` sem apagar nenhum dado existente.
+ */
+export function migratePositions(positions: OrganizationPosition[]): {
+  positions: OrganizationPosition[];
+  migrated: boolean;
+} {
+  let migrated = false;
+  const next = positions.map((position) => {
+    if (typeof position.photoUrl === "string") return position;
+    migrated = true;
+    return { ...position, photoUrl: position.photoUrl ?? "" };
+  });
+  return { positions: next, migrated };
+}
+
 export function getPositions(): OrganizationPosition[] | null {
   if (!isBrowser()) return null;
   const value = window.localStorage.getItem(POSITIONS_KEY);
