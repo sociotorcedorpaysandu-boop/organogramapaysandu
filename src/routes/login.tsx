@@ -12,6 +12,7 @@ const DEMO_EMAIL = "admin@paysandu.com.br";
 const DEMO_PASSWORD = "123456";
 
 export const Route = createFileRoute("/login")({
+  ssr: false,
   head: () => ({
     meta: [
       { title: "Entrar — Organograma Institucional Paysandu" },

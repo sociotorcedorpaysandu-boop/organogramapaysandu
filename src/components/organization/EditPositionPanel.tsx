@@ -23,6 +23,9 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { PositionQRCode, profileUrl } from "@/components/organization/PositionQRCode";
+import { Checkbox } from "@/components/ui/checkbox";
+import { childrenLayoutLabel, resolveChildrenLayout } from "@/lib/chartLayout";
+import { POSITION_COLOR_PALETTE, normalizeHexColor } from "@/lib/positionColor";
 import {
   connectionTypeLabel,
   formatDateTime,
@@ -35,7 +38,12 @@ import {
 import { fileToPhotoDataUrl, personInitials } from "@/lib/photo";
 import { cn } from "@/lib/utils";
 import { useOrganization, type PositionInput } from "@/components/organization/OrganizationProvider";
-import type { ConnectionType, OrganizationPosition, PositionStatus } from "@/types/organization";
+import type {
+  ChildrenLayout,
+  ConnectionType,
+  OrganizationPosition,
+  PositionStatus,
+} from "@/types/organization";
 
 const NONE_SUPERIOR = "__none__";
 
@@ -54,8 +62,15 @@ export function EditPositionPanel({
   position,
   defaultSuperiorId = null,
 }: EditPositionPanelProps) {
-  const { positions, history, addPosition, updatePosition, markAsVacant, deactivatePosition } =
-    useOrganization();
+  const {
+    positions,
+    history,
+    collaboratorTypes,
+    addPosition,
+    updatePosition,
+    markAsVacant,
+    deactivatePosition,
+  } = useOrganization();
 
   const isCreate = position === null;
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -69,6 +84,9 @@ export function EditPositionPanel({
   const [tooltip, setTooltip] = useState("");
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<PositionStatus>("occupied");
+  const [positionColor, setPositionColor] = useState("");
+  const [childrenLayout, setChildrenLayout] = useState<ChildrenLayout>("automatic");
+  const [selectedTypeIds, setSelectedTypeIds] = useState<string[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [photoLoading, setPhotoLoading] = useState(false);
 
@@ -86,6 +104,11 @@ export function EditPositionPanel({
       setTooltip(position.tooltip);
       setNotes(position.notes);
       setStatus(position.status);
+      setPositionColor(position.positionColor ?? "");
+      setChildrenLayout(position.childrenLayout ?? "automatic");
+      setSelectedTypeIds(
+        Array.isArray(position.collaboratorTypeIds) ? position.collaboratorTypeIds : [],
+      );
     } else {
       setPersonName("");
       setPhotoUrl("");
@@ -96,6 +119,9 @@ export function EditPositionPanel({
       setTooltip("");
       setNotes("");
       setStatus("occupied");
+      setPositionColor("");
+      setChildrenLayout("automatic");
+      setSelectedTypeIds([]);
     }
   }, [open, position, defaultSuperiorId]);
 
@@ -150,13 +176,26 @@ export function EditPositionPanel({
       tooltip,
       notes,
       status,
+      positionColor: normalizeHexColor(positionColor) ?? "",
+      childrenLayout,
+      collaboratorTypeIds: selectedTypeIds,
     };
+  }
+
+  function toggleType(typeId: string) {
+    setSelectedTypeIds((prev) =>
+      prev.includes(typeId) ? prev.filter((id) => id !== typeId) : [...prev, typeId],
+    );
   }
 
   function handleSave() {
     setFormError(null);
     if (!positionTitle.trim()) {
       setFormError("Informe o cargo. Este campo é obrigatório.");
+      return;
+    }
+    if (positionColor.trim() && normalizeHexColor(positionColor) === null) {
+      setFormError("A cor deve estar no formato hexadecimal #RRGGBB (ex.: #38bdf8) ou ficar vazia.");
       return;
     }
     const input = buildInput();
@@ -301,6 +340,115 @@ export function EditPositionPanel({
             </div>
 
             <div className="space-y-1.5">
+              <Label>Cor de identificação do cargo (opcional)</Label>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {POSITION_COLOR_PALETTE.map((option) => (
+                  <button
+                    key={option.value || "none"}
+                    type="button"
+                    onClick={() => setPositionColor(option.value)}
+                    title={option.label}
+                    aria-label={`Cor ${option.label}`}
+                    className={cn(
+                      "h-7 w-7 rounded-full border transition-transform hover:scale-110",
+                      positionColor.trim().toLowerCase() === option.value.toLowerCase()
+                        ? "ring-2 ring-primary ring-offset-1"
+                        : "border-border",
+                    )}
+                    style={
+                      option.value
+                        ? { backgroundColor: option.value }
+                        : {
+                            background:
+                              "linear-gradient(135deg, transparent 44%, var(--color-muted-foreground) 46%, var(--color-muted-foreground) 54%, transparent 56%)",
+                          }
+                    }
+                  />
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={positionColor}
+                  onChange={(e) => setPositionColor(e.target.value)}
+                  placeholder="#RRGGBB ou vazio"
+                  className="w-40"
+                  aria-label="Cor hexadecimal do cargo"
+                />
+                {/* Pré-visualização da faixa superior do cartão */}
+                <div className="relative h-9 flex-1 overflow-hidden rounded-md border bg-card">
+                  {positionColor.trim() && normalizeHexColor(positionColor) !== null ? (
+                    <span
+                      className="absolute inset-x-0 top-0 h-[5px]"
+                      style={{ backgroundColor: positionColor.trim() }}
+                    />
+                  ) : null}
+                  <span className="absolute inset-x-2 top-3 truncate text-[10px] font-bold uppercase text-muted-foreground">
+                    {positionTitle || "Prévia do cartão"}
+                  </span>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Sem cor = cartão branco padrão. A cor aparece como faixa superior discreta.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Tipos de colaborador</Label>
+              {collaboratorTypes.filter((type) => type.isActive).length === 0 ? (
+                <p className="rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">
+                  Nenhum tipo ativo cadastrado. Gerencie em “Tipos de colaboradores”.
+                </p>
+              ) : (
+                <div className="space-y-1.5 rounded-md border p-3">
+                  {collaboratorTypes
+                    .filter((type) => type.isActive)
+                    .map((type) => (
+                      <label
+                        key={type.id}
+                        className="flex cursor-pointer items-center gap-2 text-sm text-foreground"
+                      >
+                        <Checkbox
+                          checked={selectedTypeIds.includes(type.id)}
+                          onCheckedChange={() => toggleType(type.id)}
+                          aria-label={`Tipo ${type.name}`}
+                        />
+                        <span
+                          aria-hidden
+                          className="h-2.5 w-2.5 rounded-full"
+                          style={{ backgroundColor: type.color || "var(--color-muted-foreground)" }}
+                        />
+                        {type.name}
+                      </label>
+                    ))}
+                </div>
+              )}
+              {selectedTypeIds.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {selectedTypeIds.map((typeId) => {
+                    const type = collaboratorTypes.find((t) => t.id === typeId);
+                    if (!type) return null;
+                    return (
+                      <span
+                        key={typeId}
+                        className="inline-flex items-center gap-1 rounded-full border bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
+                      >
+                        <span
+                          aria-hidden
+                          className="h-2 w-2 rounded-full"
+                          style={{ backgroundColor: type.color || "var(--color-muted-foreground)" }}
+                        />
+                        {type.name}
+                      </span>
+                    );
+                  })}
+                </div>
+              ) : null}
+              <p className="text-[11px] text-muted-foreground">
+                Os tipos pertencem à pessoa que ocupa o cargo, não ao cargo.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
               <Label htmlFor="edit-tooltip">Tooltip (descrição curta)</Label>
               <Input
                 id="edit-tooltip"
@@ -351,11 +499,35 @@ export function EditPositionPanel({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="direct">Direta (linha contínua)</SelectItem>
-                  <SelectItem value="functional">Funcional (linha tracejada)</SelectItem>
+                  <SelectItem value="direct">Direta</SelectItem>
+                  <SelectItem value="functional">Funcional (badge no cartão)</SelectItem>
                   <SelectItem value="undefined">Indefinida</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Exibição dos subordinados</Label>
+              <Select
+                value={childrenLayout}
+                onValueChange={(value) => setChildrenLayout(value as ChildrenLayout)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="automatic">Automático</SelectItem>
+                  <SelectItem value="horizontal">Horizontal</SelectItem>
+                  <SelectItem value="vertical">Vertical</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Apenas organização visual — a hierarquia real não muda. No modo automático, 5 ou
+                mais subordinados diretos usam lista vertical.
+                {!isCreate && position
+                  ? ` Com ${directReports.length} subordinado(s), a exibição atual é ${resolveChildrenLayout(childrenLayout, directReports.length) === "vertical" ? "Vertical" : "Horizontal"} (${childrenLayoutLabel(childrenLayout)}).`
+                  : ""}
+              </p>
             </div>
 
             {!isCreate && position ? (

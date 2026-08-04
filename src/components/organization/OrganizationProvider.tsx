@@ -10,16 +10,25 @@ import {
 import { toast } from "sonner";
 
 import { initialPositions } from "@/data/initialPositions";
+import { childrenLayoutLabel } from "@/lib/chartLayout";
 import {
+  collaboratorTypeIdsOf,
   getDescendantIds,
   hasCycle,
   newChangeId,
+  newCollaboratorTypeId,
   newPositionId,
   positionDisplayName,
   safePositions,
 } from "@/lib/organization";
 import * as storage from "@/services/organizationStorageService";
-import type { ChangeAction, ChangeLog, OrganizationPosition } from "@/types/organization";
+import type {
+  ChangeAction,
+  ChangeLog,
+  ChildrenLayout,
+  CollaboratorType,
+  OrganizationPosition,
+} from "@/types/organization";
 
 export interface PositionInput {
   personName: string;
@@ -31,11 +40,22 @@ export interface PositionInput {
   tooltip: string;
   notes: string;
   status: OrganizationPosition["status"];
+  positionColor: string;
+  childrenLayout: ChildrenLayout;
+  collaboratorTypeIds: string[];
+}
+
+export interface CollaboratorTypeInput {
+  name: string;
+  description: string;
+  color: string;
+  icon: string;
 }
 
 interface OrganizationContextValue {
   positions: OrganizationPosition[];
   history: ChangeLog[];
+  collaboratorTypes: CollaboratorType[];
   isLoading: boolean;
   lastUpdated: string | null;
   backupCreatedAt: string | null;
@@ -47,6 +67,11 @@ interface OrganizationContextValue {
   replacePositions: (positions: OrganizationPosition[], description: string) => void;
   restoreBackup: () => boolean;
   resetToInitialData: () => void;
+  addCollaboratorType: (input: CollaboratorTypeInput) => CollaboratorType | null;
+  updateCollaboratorType: (id: string, input: CollaboratorTypeInput) => boolean;
+  setCollaboratorTypeActive: (id: string, isActive: boolean) => void;
+  deleteCollaboratorType: (id: string) => boolean;
+  countCollaboratorTypeUsage: (id: string) => number;
 }
 
 const OrganizationContext = createContext<OrganizationContextValue | null>(null);
@@ -59,9 +84,14 @@ function describe(position: OrganizationPosition): string {
   return positionDisplayName(position);
 }
 
+function occupantName(position: OrganizationPosition): string {
+  return (position.personName ?? "").trim() || position.positionTitle || "O colaborador";
+}
+
 export function OrganizationProvider({ children }: { children: ReactNode }) {
   const [positions, setPositions] = useState<OrganizationPosition[]>([]);
   const [history, setHistory] = useState<ChangeLog[]>([]);
+  const [collaboratorTypes, setCollaboratorTypes] = useState<CollaboratorType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [backupCreatedAt, setBackupCreatedAt] = useState<string | null>(null);
@@ -73,10 +103,12 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       stored = initialPositions;
       storage.savePositions(stored);
     }
-    // Migração segura: adiciona photoUrl a registros antigos sem apagar dados.
+    // Migração segura: adiciona campos novos a registros antigos sem apagar dados.
     const migration = storage.migratePositions(safePositions(stored));
     if (migration.migrated) storage.savePositions(migration.positions);
     setPositions(migration.positions);
+    // Tipos de colaboradores: cria a lista inicial somente se ainda não existir.
+    setCollaboratorTypes(storage.ensureCollaboratorTypes());
     setHistory(storage.getHistory());
     setLastUpdated(storage.getLastUpdated());
     setBackupCreatedAt(storage.getBackup()?.createdAt ?? null);
@@ -112,12 +144,14 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
     setLastUpdated(storage.getLastUpdated());
   }, []);
 
+  const persistTypes = useCallback((next: CollaboratorType[]) => {
+    setCollaboratorTypes(next);
+    storage.saveCollaboratorTypes(next);
+  }, []);
+
   const addPosition = useCallback(
     (input: PositionInput): OrganizationPosition | null => {
       const list = safePositions(positions);
-      if (input.superiorId && hasCycle("pos-pending", input.superiorId, list)) {
-        // nunca ocorre para registros novos, mas mantido por segurança
-      }
       const now = new Date().toISOString();
       const maxLegacy = list.reduce((max, p) => Math.max(max, p.legacyId || 0), 0);
       const maxOrder = list.reduce((max, p) => Math.max(max, p.displayOrder || 0), 0);
@@ -133,6 +167,9 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
         tooltip: input.tooltip.trim(),
         notes: input.notes.trim(),
         status: input.status,
+        positionColor: input.positionColor,
+        childrenLayout: input.childrenLayout,
+        collaboratorTypeIds: input.collaboratorTypeIds,
         displayOrder: maxOrder + 1,
         createdAt: now,
         updatedAt: now,
@@ -169,14 +206,53 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
         tooltip: input.tooltip.trim(),
         notes: input.notes.trim(),
         status: input.status,
+        positionColor: input.positionColor,
+        childrenLayout: input.childrenLayout,
+        collaboratorTypeIds: input.collaboratorTypeIds,
         updatedAt: new Date().toISOString(),
       };
       persist(list.map((p) => (p.id === id ? updated : p)));
-      logChange("update", `Cargo atualizado: ${describe(updated)}`, id, current, updated);
+
+      // Histórico detalhado das alterações relevantes.
+      const details: string[] = [];
+      const previousColor = (current.positionColor ?? "").trim();
+      if (previousColor !== input.positionColor.trim()) {
+        details.push(
+          input.positionColor.trim()
+            ? `cor de identificação alterada para ${input.positionColor.trim()}`
+            : "cor de identificação removida (cartão branco)",
+        );
+      }
+      const previousLayout = current.childrenLayout ?? "automatic";
+      if (previousLayout !== input.childrenLayout) {
+        details.push(
+          `a exibição dos subordinados foi alterada para ${childrenLayoutLabel(input.childrenLayout)}`,
+        );
+      }
+      const previousTypes = new Set(collaboratorTypeIdsOf(current));
+      const nextTypes = new Set(input.collaboratorTypeIds);
+      const typeName = (typeId: string) =>
+        collaboratorTypes.find((type) => type.id === typeId)?.name ?? typeId;
+      for (const typeId of nextTypes) {
+        if (!previousTypes.has(typeId)) {
+          details.push(`${occupantName(updated)} recebeu o tipo ${typeName(typeId)}`);
+        }
+      }
+      for (const typeId of previousTypes) {
+        if (!nextTypes.has(typeId)) {
+          details.push(`${occupantName(updated)} deixou de ter o tipo ${typeName(typeId)}`);
+        }
+      }
+
+      const description =
+        details.length > 0
+          ? `Cargo atualizado: ${describe(updated)} (${details.join("; ")})`
+          : `Cargo atualizado: ${describe(updated)}`;
+      logChange("update", description, id, current, updated);
       toast.success("Alterações salvas com sucesso.");
       return true;
     },
-    [positions, persist, logChange],
+    [positions, collaboratorTypes, persist, logChange],
   );
 
   const deletePosition = useCallback(
@@ -215,6 +291,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
         ...current,
         personName: "",
         photoUrl: "",
+        collaboratorTypeIds: [],
         status: "vacant",
         updatedAt: new Date().toISOString(),
       };
@@ -244,7 +321,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
 
   const replacePositions = useCallback(
     (next: OrganizationPosition[], description: string) => {
-      const list = safePositions(next);
+      const list = storage.migratePositions(safePositions(next)).positions;
       storage.importPositions(list);
       setPositions(list);
       setLastUpdated(storage.getLastUpdated());
@@ -283,10 +360,115 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
     toast.success("Base redefinida para os dados originais.");
   }, [logChange]);
 
+  /* Tipos de colaboradores */
+
+  const countCollaboratorTypeUsage = useCallback(
+    (id: string): number => {
+      return safePositions(positions).filter((p) => collaboratorTypeIdsOf(p).includes(id)).length;
+    },
+    [positions],
+  );
+
+  const addCollaboratorType = useCallback(
+    (input: CollaboratorTypeInput): CollaboratorType | null => {
+      const name = input.name.trim();
+      if (!name) {
+        toast.error("Informe o nome do tipo de colaborador.");
+        return null;
+      }
+      const duplicated = collaboratorTypes.some(
+        (type) => type.name.trim().toLocaleLowerCase("pt-BR") === name.toLocaleLowerCase("pt-BR"),
+      );
+      if (duplicated) {
+        toast.error("Já existe um tipo de colaborador com este nome.");
+        return null;
+      }
+      const now = new Date().toISOString();
+      const type: CollaboratorType = {
+        id: newCollaboratorTypeId(),
+        name,
+        description: input.description.trim(),
+        color: input.color,
+        icon: input.icon,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+      };
+      persistTypes([...collaboratorTypes, type]);
+      logChange("create", `Tipo de colaborador criado: ${type.name}`, undefined, undefined, type);
+      toast.success("Tipo de colaborador criado.");
+      return type;
+    },
+    [collaboratorTypes, persistTypes, logChange],
+  );
+
+  const updateCollaboratorType = useCallback(
+    (id: string, input: CollaboratorTypeInput): boolean => {
+      const current = collaboratorTypes.find((type) => type.id === id);
+      if (!current) return false;
+      const name = input.name.trim();
+      if (!name) {
+        toast.error("Informe o nome do tipo de colaborador.");
+        return false;
+      }
+      const updated: CollaboratorType = {
+        ...current,
+        name,
+        description: input.description.trim(),
+        color: input.color,
+        icon: input.icon,
+        updatedAt: new Date().toISOString(),
+      };
+      persistTypes(collaboratorTypes.map((type) => (type.id === id ? updated : type)));
+      logChange("update", `Tipo de colaborador atualizado: ${updated.name}`, undefined, current, updated);
+      toast.success("Tipo de colaborador atualizado.");
+      return true;
+    },
+    [collaboratorTypes, persistTypes, logChange],
+  );
+
+  const setCollaboratorTypeActive = useCallback(
+    (id: string, isActive: boolean) => {
+      const current = collaboratorTypes.find((type) => type.id === id);
+      if (!current) return;
+      const updated: CollaboratorType = { ...current, isActive, updatedAt: new Date().toISOString() };
+      persistTypes(collaboratorTypes.map((type) => (type.id === id ? updated : type)));
+      logChange(
+        "update",
+        `Tipo de colaborador ${isActive ? "reativado" : "desativado"}: ${current.name}`,
+        undefined,
+        current,
+        updated,
+      );
+      toast.success(isActive ? "Tipo reativado." : "Tipo desativado.");
+    },
+    [collaboratorTypes, persistTypes, logChange],
+  );
+
+  const deleteCollaboratorType = useCallback(
+    (id: string): boolean => {
+      const current = collaboratorTypes.find((type) => type.id === id);
+      if (!current) return false;
+      const usage = countCollaboratorTypeUsage(id);
+      if (usage > 0) {
+        toast.error(
+          `Este tipo está associado a ${usage} colaborador(es). Desative-o em vez de excluir.`,
+        );
+        return false;
+      }
+      persistTypes(collaboratorTypes.filter((type) => type.id !== id));
+      logChange("delete", `Tipo de colaborador excluído: ${current.name}`, undefined, current, undefined);
+      toast.success("Tipo de colaborador excluído.");
+      return true;
+    },
+    [collaboratorTypes, countCollaboratorTypeUsage, persistTypes, logChange],
+  );
+
   const value = useMemo<OrganizationContextValue>(
     () => ({
       positions,
       history,
+      collaboratorTypes,
       isLoading,
       lastUpdated,
       backupCreatedAt,
@@ -298,10 +480,16 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       replacePositions,
       restoreBackup,
       resetToInitialData,
+      addCollaboratorType,
+      updateCollaboratorType,
+      setCollaboratorTypeActive,
+      deleteCollaboratorType,
+      countCollaboratorTypeUsage,
     }),
     [
       positions,
       history,
+      collaboratorTypes,
       isLoading,
       lastUpdated,
       backupCreatedAt,
@@ -313,6 +501,11 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       replacePositions,
       restoreBackup,
       resetToInitialData,
+      addCollaboratorType,
+      updateCollaboratorType,
+      setCollaboratorTypeActive,
+      deleteCollaboratorType,
+      countCollaboratorTypeUsage,
     ],
   );
 

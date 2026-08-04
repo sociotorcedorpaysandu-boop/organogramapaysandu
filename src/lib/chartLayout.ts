@@ -1,4 +1,4 @@
-import type { OrganizationPosition } from "@/types/organization";
+import type { ChildrenLayout, OrganizationPosition } from "@/types/organization";
 
 /**
  * Layout hierárquico do organograma.
@@ -8,6 +8,13 @@ import type { OrganizationPosition } from "@/types/organization";
  * o mesmo superior são irmãos e ficam no mesmo nível, distribuídos
  * horizontalmente; quando há muitos subordinados, eles quebram em linhas
  * organizadas sem alterar a hierarquia real.
+ *
+ * Disposição dos subordinados (por responsável):
+ * - horizontal: irmãos lado a lado no mesmo nível (quebra em linhas se largo);
+ * - vertical: irmãos em uma lista vertical contínua, todos ligados diretamente
+ *   ao mesmo responsável (nunca um ao outro).
+ * A escolha pode ser manual (cargo a cargo) ou automática pela quantidade de
+ * subordinados diretos — ver DEFAULT_VERTICAL_THRESHOLD.
  */
 
 const H_GAP = 44; // espaço horizontal entre cartões/subárvores
@@ -15,6 +22,33 @@ const V_GAP = 96; // espaço vertical entre níveis
 const ROW_GAP = 64; // espaço vertical entre linhas de uma mesma geração
 const ROOT_GAP = 80; // espaço entre raízes (árvores distintas)
 const MAX_ROW_WIDTH = 1560; // largura máxima de uma linha de subordinados
+const VLIST_INDENT = 48; // deslocamento da lista vertical à direita do tronco do responsável
+const VLIST_GAP = 20; // espaço vertical compacto entre itens da lista vertical
+
+/**
+ * Quantidade de subordinados diretos a partir da qual o modo automático
+ * passa a exibir a lista vertical. Configurável apenas aqui.
+ */
+export const DEFAULT_VERTICAL_THRESHOLD = 5;
+
+/**
+ * Resolve a disposição efetiva dos subordinados de um responsável.
+ * A escolha manual (horizontal/vertical) sempre prevalece sobre a automática.
+ */
+export function resolveChildrenLayout(
+  configuredLayout: ChildrenLayout | undefined,
+  childrenCount: number,
+): "horizontal" | "vertical" {
+  if (configuredLayout === "horizontal") return "horizontal";
+  if (configuredLayout === "vertical") return "vertical";
+  return childrenCount >= DEFAULT_VERTICAL_THRESHOLD ? "vertical" : "horizontal";
+}
+
+export function childrenLayoutLabel(layout: ChildrenLayout | undefined): string {
+  if (layout === "horizontal") return "Horizontal";
+  if (layout === "vertical") return "Vertical";
+  return "Automático";
+}
 
 interface Block {
   width: number;
@@ -39,6 +73,7 @@ export function layoutHierarchy(
 ): Map<string, { x: number; y: number }> {
   const positions = new Map<string, { x: number; y: number }>();
   const visibleIds = new Set(visible.map((p) => p.id));
+  const byId = new Map(visible.map((p) => [p.id, p]));
 
   const children = new Map<string, OrganizationPosition[]>();
   const roots: OrganizationPosition[] = [];
@@ -59,12 +94,36 @@ export function layoutHierarchy(
 
   const blockCache = new Map<string, Block>();
   const rowsCache = new Map<string, RowInfo[]>();
+  const verticalCache = new Map<string, boolean>();
+
+  /** O responsável exibe seus subordinados em lista vertical? */
+  function isVertical(id: string): boolean {
+    const cached = verticalCache.get(id);
+    if (cached !== undefined) return cached;
+    const kids = children.get(id) ?? [];
+    const result =
+      kids.length > 0 &&
+      resolveChildrenLayout(byId.get(id)?.childrenLayout, kids.length) === "vertical";
+    verticalCache.set(id, result);
+    return result;
+  }
 
   function rowsOf(id: string): RowInfo[] {
     const cached = rowsCache.get(id);
     if (cached) return cached;
 
     const kids = children.get(id) ?? [];
+
+    // Lista vertical: cada subordinado ocupa sua própria linha (coluna única).
+    if (isVertical(id)) {
+      const rows = kids.map((kid) => {
+        const block = blockOf(kid.id);
+        return { kids: [kid], width: block.width, height: block.height };
+      });
+      rowsCache.set(id, rows);
+      return rows;
+    }
+
     const rows: RowInfo[] = [];
     let current: OrganizationPosition[] = [];
     let currentWidth = 0;
@@ -100,6 +159,15 @@ export function layoutHierarchy(
     let block: Block;
     if (rows.length === 0) {
       block = { width: nodeWidth, height: nodeHeight };
+    } else if (isVertical(id)) {
+      // Coluna única à direita do tronco: largura = meio cartão + recuo + maior filho.
+      const childMaxWidth = Math.max(...rows.map((row) => row.width));
+      const childrenHeight =
+        rows.reduce((sum, row) => sum + row.height, 0) + VLIST_GAP * (rows.length - 1);
+      block = {
+        width: Math.max(nodeWidth, nodeWidth / 2 + VLIST_INDENT + childMaxWidth),
+        height: nodeHeight + V_GAP + childrenHeight,
+      };
     } else {
       const childrenWidth = Math.max(...rows.map((row) => row.width));
       const childrenHeight =
@@ -115,8 +183,24 @@ export function layoutHierarchy(
 
   function assign(id: string, centerX: number, top: number): void {
     positions.set(id, { x: centerX - nodeWidth / 2, y: top });
+    const rows = rowsOf(id);
+    if (rows.length === 0) return;
+
+    if (isVertical(id)) {
+      // Tronco vertical contínuo sob o responsável; a coluna de subordinados
+      // fica recuada à direita para que cada derivação saia do mesmo tronco.
+      let rowTop = top + nodeHeight + V_GAP;
+      for (const row of rows) {
+        const kid = row.kids[0];
+        const block = blockOf(kid.id);
+        assign(kid.id, centerX + VLIST_INDENT + block.width / 2, rowTop);
+        rowTop += row.height + VLIST_GAP;
+      }
+      return;
+    }
+
     let rowTop = top + nodeHeight + V_GAP;
-    for (const row of rowsOf(id)) {
+    for (const row of rows) {
       let cursor = centerX - row.width / 2;
       for (const kid of row.kids) {
         const block = blockOf(kid.id);

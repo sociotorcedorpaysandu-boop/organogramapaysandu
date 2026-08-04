@@ -251,3 +251,79 @@ export function newChangeId(): string {
   }
   return `log-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
 }
+
+export function newCollaboratorTypeId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `ctype-${crypto.randomUUID()}`;
+  }
+  return `ctype-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+}
+
+/* Tipos de colaboradores e quantitativos */
+
+export function collaboratorTypeIdsOf(position: OrganizationPosition): string[] {
+  return Array.isArray(position.collaboratorTypeIds) ? position.collaboratorTypeIds : [];
+}
+
+/** Quantidade de colaboradores (cargos ocupados com pessoa) por tipo. */
+export function computeTypeCounts(positions: OrganizationPosition[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const position of safePositions(positions)) {
+    if (position.status !== "occupied" || !(position.personName ?? "").trim()) continue;
+    for (const typeId of collaboratorTypeIdsOf(position)) {
+      counts.set(typeId, (counts.get(typeId) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+export interface PositionQuantity {
+  title: string;
+  total: number;
+  occupied: number;
+  vacant: number;
+}
+
+/** Quantitativos agrupados por nome de cargo (normalizado). */
+export function computePositionQuantities(positions: OrganizationPosition[]): PositionQuantity[] {
+  const groups = new Map<string, PositionQuantity>();
+  for (const position of safePositions(positions)) {
+    const title = (position.positionTitle ?? "").trim() || "Cargo não definido";
+    const key = title.toLocaleUpperCase("pt-BR");
+    const group = groups.get(key) ?? { title, total: 0, occupied: 0, vacant: 0 };
+    group.total += 1;
+    if (position.status === "occupied") group.occupied += 1;
+    else if (position.status === "vacant") group.vacant += 1;
+    groups.set(key, group);
+  }
+  return Array.from(groups.values()).sort((a, b) => b.total - a.total || a.title.localeCompare(b.title, "pt-BR"));
+}
+
+export interface AreaQuantity {
+  area: string;
+  total: number;
+  occupied: number;
+  vacant: number;
+  typeCounts: Map<string, number>;
+}
+
+/** Quantitativos agrupados por área, incluindo contagem por tipo. */
+export function computeAreaQuantities(positions: OrganizationPosition[]): AreaQuantity[] {
+  const groups = new Map<string, AreaQuantity>();
+  for (const position of safePositions(positions)) {
+    const area = (position.area ?? "").trim() || "Sem área definida";
+    const key = area.toLocaleUpperCase("pt-BR");
+    const group =
+      groups.get(key) ?? { area, total: 0, occupied: 0, vacant: 0, typeCounts: new Map<string, number>() };
+    group.total += 1;
+    if (position.status === "occupied") group.occupied += 1;
+    else if (position.status === "vacant") group.vacant += 1;
+    if (position.status === "occupied" && (position.personName ?? "").trim()) {
+      for (const typeId of collaboratorTypeIdsOf(position)) {
+        group.typeCounts.set(typeId, (group.typeCounts.get(typeId) ?? 0) + 1);
+      }
+    }
+    groups.set(key, group);
+  }
+  return Array.from(groups.values()).sort((a, b) => a.area.localeCompare(b.area, "pt-BR"));
+}
