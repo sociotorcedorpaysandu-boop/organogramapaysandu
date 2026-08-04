@@ -10,8 +10,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { personInitials } from "@/lib/photo";
+import { collaboratorTypeIcon } from "@/lib/typeIcons";
 import { cn } from "@/lib/utils";
 import type { DisplayMode, OrganizationPosition } from "@/types/organization";
+
+/** Indicador visual de um tipo de colaborador exibido no cartão. */
+export interface TypeBadge {
+  id: string;
+  name: string;
+  color: string;
+  icon: string;
+  description: string;
+}
 
 export interface PositionNodeData extends Record<string, unknown> {
   position: OrganizationPosition;
@@ -20,6 +30,8 @@ export interface PositionNodeData extends Record<string, unknown> {
   highlighted: boolean;
   dimmed: boolean;
   displayMode: DisplayMode;
+  typeBadges: TypeBadge[];
+  showTypeBadges: boolean;
   onToggle: (id: string) => void;
   onEdit: (id: string) => void;
   onOpenProfile: (id: string) => void;
@@ -30,7 +42,7 @@ export interface PositionNodeData extends Record<string, unknown> {
 export type PositionFlowNode = Node<PositionNodeData, "position">;
 
 export const NODE_WIDTH = 250;
-export const NODE_HEIGHT = 118;
+export const NODE_HEIGHT = 140;
 
 function PersonAvatar({ position, size }: { position: OrganizationPosition; size: string }) {
   const photo = (position.photoUrl ?? "").trim();
@@ -51,6 +63,8 @@ export function PositionNode({ data }: NodeProps<PositionFlowNode>) {
   const person = (position.personName ?? "").trim();
   const showTitle = displayMode !== "name";
   const showPerson = displayMode !== "title";
+  const positionColor = (position.positionColor ?? "").trim();
+  const badges = data.showTypeBadges ? data.typeBadges : [];
 
   return (
     <div
@@ -65,6 +79,15 @@ export function PositionNode({ data }: NodeProps<PositionFlowNode>) {
       )}
       title={position.tooltip || undefined}
     >
+      {/* Faixa superior opcional na cor de identificação do cargo */}
+      {positionColor ? (
+        <span
+          aria-hidden
+          className="print-exact absolute inset-x-0 top-0 h-[5px] rounded-t-lg"
+          style={{ backgroundColor: positionColor }}
+        />
+      ) : null}
+
       <Handle type="target" position={Position.Top} className="!bg-border" />
 
       <div className="flex items-start justify-between gap-2">
@@ -120,6 +143,30 @@ export function PositionNode({ data }: NodeProps<PositionFlowNode>) {
           >
             {isVacant ? "CARGO VAGO" : person || "—"}
           </p>
+        </div>
+      ) : null}
+
+      {/* Indicadores discretos dos tipos do colaborador */}
+      {badges.length > 0 && !isVacant ? (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+          {badges.map((badge) => {
+            const Icon = collaboratorTypeIcon(badge.icon);
+            return (
+              <span
+                key={badge.id}
+                title={badge.description ? `${badge.name} — ${badge.description}` : badge.name}
+                className="print-exact inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-1.5 py-px text-[10px] font-medium text-muted-foreground"
+              >
+                <span
+                  aria-hidden
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: badge.color || "var(--color-muted-foreground)" }}
+                />
+                <Icon className="h-2.5 w-2.5" aria-hidden />
+                <span className="max-w-20 truncate">{badge.name}</span>
+              </span>
+            );
+          })}
         </div>
       ) : null}
 
