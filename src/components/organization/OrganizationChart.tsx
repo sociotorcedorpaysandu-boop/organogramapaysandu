@@ -16,12 +16,22 @@ import {
   Plus,
   Printer,
   Search,
+  Tags,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -33,6 +43,7 @@ import {
 import { layoutHierarchy } from "@/lib/chartLayout";
 import {
   categorizePositions,
+  collaboratorTypeIdsOf,
   displayModeLabel,
   formatDateTime,
   listAreas,
@@ -41,11 +52,13 @@ import {
 import { cn } from "@/lib/utils";
 import { getDisplayMode, saveDisplayMode } from "@/services/organizationStorageService";
 import type { DisplayMode, OrganizationPosition } from "@/types/organization";
+import { useOrganization } from "@/components/organization/OrganizationProvider";
 import {
   NODE_HEIGHT,
   NODE_WIDTH,
   PositionNode,
   type PositionFlowNode,
+  type TypeBadge,
 } from "@/components/organization/PositionNode";
 
 export const EMPTY_AREA_TOKEN = "__sem_area__";
@@ -67,15 +80,22 @@ interface OrganizationChartProps {
   onOrphanCountChange?: (count: number) => void;
 }
 
+/**
+ * Todas as conexões do organograma são linhas contínuas.
+ * A diferenciação do vínculo (direta/funcional/indefinida) é feita por cor
+ * sutil e pelo badge no cartão — nunca por linhas tracejadas.
+ */
 function edgeStyleFor(connectionType: OrganizationPosition["connectionType"]) {
   if (connectionType === "functional") {
-    return { stroke: "var(--color-chart-2)", strokeWidth: 1.75, strokeDasharray: "7 5" };
+    return { stroke: "var(--color-chart-2)", strokeWidth: 1.75 };
   }
   if (connectionType === "undefined") {
-    return { stroke: "var(--color-muted-foreground)", strokeWidth: 1.25, strokeDasharray: "2 5" };
+    return { stroke: "var(--color-muted-foreground)", strokeWidth: 1.5 };
   }
   return { stroke: "var(--color-primary)", strokeWidth: 1.75 };
 }
+
+type TypeFilterMode = "highlight" | "only";
 
 function ChartInner({
   positions,
@@ -89,10 +109,14 @@ function ChartInner({
 }: OrganizationChartProps) {
   const reactFlow = useReactFlow();
   const fullscreenRef = useRef<HTMLDivElement>(null);
+  const { collaboratorTypes } = useOrganization();
 
   const [search, setSearch] = useState("");
   const [areaFilter, setAreaFilter] = useState<string>(initialArea ?? "all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set());
+  const [typeFilterMode, setTypeFilterMode] = useState<TypeFilterMode>("highlight");
+  const [showTypeBadges, setShowTypeBadges] = useState(true);
   const [displayMode, setDisplayMode] = useState<DisplayMode>(() => getDisplayMode());
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -122,9 +146,37 @@ function ChartInner({
   const areas = useMemo(() => listAreas(list), [list]);
   const hasEmptyArea = useMemo(() => list.some((p) => !(p.area ?? "").trim()), [list]);
 
+  const typeIndex = useMemo(() => {
+    const map = new Map(collaboratorTypes.map((type) => [type.id, type]));
+    return map;
+  }, [collaboratorTypes]);
+
+  const activeTypes = useMemo(
+    () => collaboratorTypes.filter((type) => type.isActive),
+    [collaboratorTypes],
+  );
+
+  const badgesOf = useCallback(
+    (position: OrganizationPosition): TypeBadge[] => {
+      const badges: TypeBadge[] = [];
+      for (const typeId of collaboratorTypeIdsOf(position)) {
+        const type = typeIndex.get(typeId);
+        if (!type || !type.isActive) continue;
+        badges.push({
+          id: type.id,
+          name: type.name,
+          color: type.color ?? "",
+          icon: type.icon ?? "",
+          description: type.description ?? "",
+        });
+      }
+      return badges;
+    },
+    [typeIndex],
+  );
+
   const { categorized, matchIds } = useMemo(() => {
     const categorizedResult = categorizePositions(list);
-    const filteringActive = areaFilter !== "all" || statusFilter !== "all";
     const query = search.trim().toLowerCase();
     const matches = new Set<string>();
     if (query) {
@@ -133,8 +185,8 @@ function ChartInner({
         if (haystack.includes(query)) matches.add(p.id);
       }
     }
-    return { categorized: categorizedResult, matchIds: matches, filtering: filteringActive };
-  }, [list, areaFilter, statusFilter, search]);
+    return { categorized: categorizedResult, matchIds: matches };
+  }, [list, search]);
 
   useEffect(() => {
     onOrphanCountChange?.(categorized.orphans.length);
@@ -154,10 +206,20 @@ function ChartInner({
     saveDisplayMode(mode);
   }
 
+  function toggleTypeFilter(typeId: string) {
+    setTypeFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(typeId)) next.delete(typeId);
+      else next.add(typeId);
+      return next;
+    });
+  }
+
   const { nodes, edges, signature } = useMemo(() => {
     const { orphanIds } = categorized;
     const index = new Map(list.map((p) => [p.id, p]));
     const filtering = areaFilter !== "all" || statusFilter !== "all";
+    const typeFiltering = typeFilter.size > 0;
 
     const matchesFilter = (p: OrganizationPosition) => {
       if (areaFilter !== "all") {
@@ -171,14 +233,39 @@ function ChartInner({
       return true;
     };
 
+    // Corresponde a qualquer tipo selecionado (lógica OU).
+    const matchesType = (p: OrganizationPosition) => {
+      if (!typeFiltering) return false;
+      return collaboratorTypeIdsOf(p).some((typeId) => typeFilter.has(typeId));
+    };
+
     const inTree = list.filter((p) => !orphanIds.has(p.id));
     const visibleSet = new Set(
       (filtering ? inTree.filter(matchesFilter) : inTree).map((p) => p.id),
     );
 
+    // Modo "somente correspondentes": mantém os superiores dos correspondentes
+    // para preservar o contexto hierárquico (nenhum cargo fica desconectado).
+    if (typeFiltering && typeFilterMode === "only") {
+      const keep = new Set<string>();
+      for (const p of inTree) {
+        if (!visibleSet.has(p.id) || !matchesType(p)) continue;
+        keep.add(p.id);
+        let current = p.superiorId;
+        let steps = 0;
+        while (current && steps < 1000) {
+          keep.add(current);
+          current = index.get(current)?.superiorId ?? null;
+          steps += 1;
+        }
+      }
+      for (const id of Array.from(visibleSet)) {
+        if (!keep.has(id)) visibleSet.delete(id);
+      }
+    }
+
     // Pai visual: superior real ou, quando filtrado, ancestral visível mais próximo.
     const parentOf = (p: OrganizationPosition): string | null => {
-      if (!filtering) return p.superiorId && visibleSet.has(p.superiorId) ? p.superiorId : null;
       let current = p.superiorId;
       let steps = 0;
       while (current && steps < 1000) {
@@ -217,26 +304,34 @@ function ChartInner({
       childCounts.set(p.superiorId, (childCounts.get(p.superiorId) ?? 0) + 1);
     }
 
-    const searching = matchIds.size > 0 || search.trim().length > 0;
+    const searching = search.trim().length > 0;
+    const typeHighlight = typeFiltering && typeFilterMode === "highlight";
 
-    const flowNodes: PositionFlowNode[] = visible.map((p) => ({
-      id: p.id,
-      type: "position",
-      position: { x: 0, y: 0 },
-      data: {
-        position: p,
-        childrenCount: childCounts.get(p.id) ?? 0,
-        collapsed: collapsed.has(p.id),
-        highlighted: matchIds.has(p.id),
-        dimmed: searching && matchIds.size > 0 && !matchIds.has(p.id),
-        displayMode,
-        onToggle: toggleCollapse,
-        onEdit,
-        onOpenProfile,
-        onMarkVacant,
-        onDeactivate,
-      },
-    }));
+    const flowNodes: PositionFlowNode[] = visible.map((p) => {
+      const typeMatched = matchesType(p);
+      return {
+        id: p.id,
+        type: "position",
+        position: { x: 0, y: 0 },
+        data: {
+          position: p,
+          childrenCount: childCounts.get(p.id) ?? 0,
+          collapsed: collapsed.has(p.id),
+          highlighted: matchIds.has(p.id) || (typeHighlight && typeMatched),
+          dimmed:
+            (searching && matchIds.size > 0 && !matchIds.has(p.id)) ||
+            (typeHighlight && !typeMatched),
+          displayMode,
+          typeBadges: badgesOf(p),
+          showTypeBadges,
+          onToggle: toggleCollapse,
+          onEdit,
+          onOpenProfile,
+          onMarkVacant,
+          onDeactivate,
+        },
+      };
+    });
 
     const flowEdges: Edge[] = [];
     for (const p of visible) {
@@ -252,16 +347,16 @@ function ChartInner({
     }
 
     // Layout hierárquico: profundidade pela cadeia de superiores; irmãos no
-    // mesmo nível, quebrando em linhas quando há muitos subordinados.
+    // mesmo nível, na horizontal ou em lista vertical conforme o responsável.
     const layout = layoutHierarchy(visible, parentOf, NODE_WIDTH, NODE_HEIGHT);
     for (const node of flowNodes) {
       const laidOut = layout.get(node.id);
       if (laidOut) node.position = laidOut;
     }
 
-    const sig = `${flowNodes.length}:${flowEdges.length}:${areaFilter}:${statusFilter}:${displayMode}:${Array.from(collapsed).join(",")}`;
+    const sig = `${flowNodes.length}:${flowEdges.length}:${areaFilter}:${statusFilter}:${displayMode}:${typeFilterMode}:${Array.from(typeFilter).sort().join("|")}:${showTypeBadges}:${Array.from(collapsed).join(",")}`;
     return { nodes: flowNodes, edges: flowEdges, signature: sig };
-  }, [categorized, list, areaFilter, statusFilter, displayMode, collapsed, matchIds, search, toggleCollapse, onEdit, onOpenProfile, onMarkVacant, onDeactivate]);
+  }, [categorized, list, areaFilter, statusFilter, typeFilter, typeFilterMode, showTypeBadges, displayMode, collapsed, matchIds, search, badgesOf, toggleCollapse, onEdit, onOpenProfile, onMarkVacant, onDeactivate]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -316,6 +411,14 @@ function ChartInner({
         ? "Sem área definida"
         : areaFilter;
 
+  const printTypeLabel =
+    typeFilter.size === 0
+      ? "Todos os tipos"
+      : activeTypes
+          .filter((type) => typeFilter.has(type.id))
+          .map((type) => type.name)
+          .join(", ") || "Todos os tipos";
+
   return (
     <div className="flex flex-col gap-3">
       {/* Cabeçalho exibido apenas na impressão */}
@@ -324,8 +427,8 @@ function ChartInner({
           Organograma Institucional — Paysandu Sport Club
         </h1>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          Modo de visualização: {displayModeLabel(displayMode)} • Área: {printAreaLabel} • Impresso
-          em {formatDateTime(new Date().toISOString())}
+          Modo de visualização: {displayModeLabel(displayMode)} • Área: {printAreaLabel} • Tipos:{" "}
+          {printTypeLabel} • Impresso em {formatDateTime(new Date().toISOString())}
         </p>
       </div>
 
@@ -369,6 +472,76 @@ function ChartInner({
           </SelectContent>
         </Select>
 
+        {/* Filtro por tipo de colaborador (qualquer tipo selecionado) */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" aria-label="Filtrar por tipo de colaborador">
+              <Tags className="h-4 w-4" />
+              Tipos
+              {typeFilter.size > 0 ? (
+                <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-bold text-primary-foreground">
+                  {typeFilter.size}
+                </span>
+              ) : null}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-60">
+            <DropdownMenuLabel>Filtrar por tipo</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {activeTypes.length === 0 ? (
+              <p className="px-2 py-2 text-xs text-muted-foreground">
+                Nenhum tipo ativo cadastrado.
+              </p>
+            ) : (
+              activeTypes.map((type) => (
+                <DropdownMenuCheckboxItem
+                  key={type.id}
+                  checked={typeFilter.has(type.id)}
+                  onCheckedChange={() => toggleTypeFilter(type.id)}
+                  onSelect={(event) => event.preventDefault()}
+                >
+                  <span
+                    aria-hidden
+                    className="mr-1 inline-block h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: type.color || "var(--color-muted-foreground)" }}
+                  />
+                  {type.name}
+                </DropdownMenuCheckboxItem>
+              ))
+            )}
+            {typeFilter.size > 0 ? (
+              <>
+                <DropdownMenuSeparator />
+                <div className="px-2 py-1.5">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start"
+                    onClick={() => setTypeFilter(new Set())}
+                  >
+                    Limpar filtro de tipos
+                  </Button>
+                </div>
+              </>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {typeFilter.size > 0 ? (
+          <Select
+            value={typeFilterMode}
+            onValueChange={(value) => setTypeFilterMode(value as TypeFilterMode)}
+          >
+            <SelectTrigger className="w-56" aria-label="Comportamento do filtro de tipos">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="highlight">Destacar no organograma</SelectItem>
+              <SelectItem value="only">Mostrar somente correspondentes</SelectItem>
+            </SelectContent>
+          </Select>
+        ) : null}
+
         <Select value={displayMode} onValueChange={(value) => changeDisplayMode(value as DisplayMode)}>
           <SelectTrigger className="w-44" aria-label="Modo de visualização dos cartões">
             <SelectValue placeholder="Modo de visualização" />
@@ -379,6 +552,15 @@ function ChartInner({
             <SelectItem value="name">Somente nome</SelectItem>
           </SelectContent>
         </Select>
+
+        <label className="flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 text-xs font-medium text-muted-foreground">
+          <Checkbox
+            checked={showTypeBadges}
+            onCheckedChange={(checked) => setShowTypeBadges(checked === true)}
+            aria-label="Exibir tipos de colaboradores nos cartões e na impressão"
+          />
+          Exibir tipos
+        </label>
 
         <div className="ml-auto flex flex-wrap items-center gap-1">
           <Button variant="outline" size="sm" onClick={expandAll}>
@@ -468,11 +650,11 @@ function ChartInner({
               Ligação direta
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="inline-block h-0 w-7 border-t-2 border-dashed border-chart-2" />
+              <span className="inline-block h-0 w-7 border-t-2 border-chart-2" />
               Ligação funcional
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="inline-block h-0 w-7 border-t-2 border-dotted border-muted-foreground" />
+              <span className="inline-block h-0 w-7 border-t-2 border-muted-foreground" />
               Indefinida
             </span>
             <span className="flex items-center gap-1.5">
