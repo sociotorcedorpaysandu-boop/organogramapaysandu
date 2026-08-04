@@ -1,5 +1,6 @@
 import type {
   ChangeLog,
+  CollaboratorType,
   DisplayMode,
   OrganizationBackup,
   OrganizationPosition,
@@ -12,6 +13,7 @@ const SESSION_KEY = "paysandu_organogram_session_v1";
 const BACKUP_KEY = "paysandu_organogram_backup_v1";
 const META_KEY = "paysandu_organogram_meta_v1";
 const DISPLAY_MODE_KEY = "paysandu_organogram_display_mode_v1";
+const COLLABORATOR_TYPES_KEY = "paysandu_collaborator_types_v1";
 
 const DISPLAY_MODES: DisplayMode[] = ["title-name", "title", "name"];
 
@@ -44,8 +46,9 @@ function writeJson(key: string, value: unknown): void {
 /* Posições */
 
 /**
- * Migração segura: garante que registros antigos (sem foto) recebam
- * `photoUrl` sem apagar nenhum dado existente.
+ * Migração segura: garante que registros antigos recebam os campos novos
+ * (`photoUrl`, `positionColor`, `childrenLayout`, `collaboratorTypeIds`)
+ * sem apagar nenhum dado existente.
  */
 export function migratePositions(positions: OrganizationPosition[]): {
   positions: OrganizationPosition[];
@@ -53,9 +56,22 @@ export function migratePositions(positions: OrganizationPosition[]): {
 } {
   let migrated = false;
   const next = positions.map((position) => {
-    if (typeof position.photoUrl === "string") return position;
+    const needsMigration =
+      typeof position.photoUrl !== "string" ||
+      typeof position.positionColor !== "string" ||
+      typeof position.childrenLayout !== "string" ||
+      !Array.isArray(position.collaboratorTypeIds);
+    if (!needsMigration) return position;
     migrated = true;
-    return { ...position, photoUrl: position.photoUrl ?? "" };
+    return {
+      ...position,
+      photoUrl: position.photoUrl ?? "",
+      positionColor: position.positionColor ?? "",
+      childrenLayout: position.childrenLayout ?? "automatic",
+      collaboratorTypeIds: Array.isArray(position.collaboratorTypeIds)
+        ? position.collaboratorTypeIds
+        : [],
+    };
   });
   return { positions: next, migrated };
 }
@@ -144,6 +160,54 @@ export function clearData(): void {
   window.localStorage.removeItem(HISTORY_KEY);
   window.localStorage.removeItem(META_KEY);
   window.localStorage.removeItem(BACKUP_KEY);
+}
+
+/* Tipos de colaboradores */
+
+/** Tipos iniciais sugeridos — criados somente se a chave ainda não existir. */
+const DEFAULT_COLLABORATOR_TYPES: Array<{
+  name: string;
+  description: string;
+  color: string;
+  icon: string;
+}> = [
+  { name: "PCD", description: "Pessoa com deficiência", color: "#7c3aed", icon: "accessibility" },
+  { name: "Voluntário", description: "Atuação voluntária no clube", color: "#16a34a", icon: "heart-handshake" },
+  { name: "Estagiário", description: "Vínculo de estágio", color: "#d97706", icon: "graduation-cap" },
+  { name: "Terceirizado", description: "Empresa terceirizada", color: "#64748b", icon: "briefcase" },
+];
+
+export function getCollaboratorTypes(): CollaboratorType[] {
+  const types = readJson<CollaboratorType[]>(COLLABORATOR_TYPES_KEY, []);
+  return Array.isArray(types) ? types : [];
+}
+
+export function saveCollaboratorTypes(types: CollaboratorType[]): void {
+  writeJson(COLLABORATOR_TYPES_KEY, Array.isArray(types) ? types : []);
+}
+
+/**
+ * Garante a lista de tipos: cria a lista inicial somente se a chave ainda
+ * não existir. Nunca sobrescreve tipos já cadastrados pelo administrador.
+ */
+export function ensureCollaboratorTypes(): CollaboratorType[] {
+  if (!isBrowser()) return [];
+  if (window.localStorage.getItem(COLLABORATOR_TYPES_KEY) !== null) {
+    return getCollaboratorTypes();
+  }
+  const now = new Date().toISOString();
+  const initial: CollaboratorType[] = DEFAULT_COLLABORATOR_TYPES.map((type, index) => ({
+    id: `ctype-${index + 1}-${type.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+    name: type.name,
+    description: type.description,
+    color: type.color,
+    icon: type.icon,
+    isActive: true,
+    createdAt: now,
+    updatedAt: now,
+  }));
+  saveCollaboratorTypes(initial);
+  return initial;
 }
 
 /* Preferência de exibição do organograma */

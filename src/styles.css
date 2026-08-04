@@ -148,6 +148,12 @@
   }
 }
 
+/* Preserva cores de faixas/indicadores na impressão (quando o navegador imprime gráficos de fundo). */
+.print-exact {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
 /*
  * Impressão do organograma.
  * .no-print  → oculto na impressão (menus, filtros, botões, controles).
