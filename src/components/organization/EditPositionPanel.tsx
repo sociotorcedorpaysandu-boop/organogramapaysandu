@@ -23,6 +23,9 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { PositionQRCode, profileUrl } from "@/components/organization/PositionQRCode";
+import { Checkbox } from "@/components/ui/checkbox";
+import { childrenLayoutLabel, resolveChildrenLayout } from "@/lib/chartLayout";
+import { POSITION_COLOR_PALETTE, normalizeHexColor } from "@/lib/positionColor";
 import {
   connectionTypeLabel,
   formatDateTime,
@@ -35,7 +38,12 @@ import {
 import { fileToPhotoDataUrl, personInitials } from "@/lib/photo";
 import { cn } from "@/lib/utils";
 import { useOrganization, type PositionInput } from "@/components/organization/OrganizationProvider";
-import type { ConnectionType, OrganizationPosition, PositionStatus } from "@/types/organization";
+import type {
+  ChildrenLayout,
+  ConnectionType,
+  OrganizationPosition,
+  PositionStatus,
+} from "@/types/organization";
 
 const NONE_SUPERIOR = "__none__";
 
@@ -54,8 +62,15 @@ export function EditPositionPanel({
   position,
   defaultSuperiorId = null,
 }: EditPositionPanelProps) {
-  const { positions, history, addPosition, updatePosition, markAsVacant, deactivatePosition } =
-    useOrganization();
+  const {
+    positions,
+    history,
+    collaboratorTypes,
+    addPosition,
+    updatePosition,
+    markAsVacant,
+    deactivatePosition,
+  } = useOrganization();
 
   const isCreate = position === null;
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -69,6 +84,9 @@ export function EditPositionPanel({
   const [tooltip, setTooltip] = useState("");
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<PositionStatus>("occupied");
+  const [positionColor, setPositionColor] = useState("");
+  const [childrenLayout, setChildrenLayout] = useState<ChildrenLayout>("automatic");
+  const [selectedTypeIds, setSelectedTypeIds] = useState<string[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [photoLoading, setPhotoLoading] = useState(false);
 
@@ -86,6 +104,11 @@ export function EditPositionPanel({
       setTooltip(position.tooltip);
       setNotes(position.notes);
       setStatus(position.status);
+      setPositionColor(position.positionColor ?? "");
+      setChildrenLayout(position.childrenLayout ?? "automatic");
+      setSelectedTypeIds(
+        Array.isArray(position.collaboratorTypeIds) ? position.collaboratorTypeIds : [],
+      );
     } else {
       setPersonName("");
       setPhotoUrl("");
@@ -96,6 +119,9 @@ export function EditPositionPanel({
       setTooltip("");
       setNotes("");
       setStatus("occupied");
+      setPositionColor("");
+      setChildrenLayout("automatic");
+      setSelectedTypeIds([]);
     }
   }, [open, position, defaultSuperiorId]);
 
@@ -150,13 +176,26 @@ export function EditPositionPanel({
       tooltip,
       notes,
       status,
+      positionColor: normalizeHexColor(positionColor) ?? "",
+      childrenLayout,
+      collaboratorTypeIds: selectedTypeIds,
     };
+  }
+
+  function toggleType(typeId: string) {
+    setSelectedTypeIds((prev) =>
+      prev.includes(typeId) ? prev.filter((id) => id !== typeId) : [...prev, typeId],
+    );
   }
 
   function handleSave() {
     setFormError(null);
     if (!positionTitle.trim()) {
       setFormError("Informe o cargo. Este campo é obrigatório.");
+      return;
+    }
+    if (positionColor.trim() && normalizeHexColor(positionColor) === null) {
+      setFormError("A cor deve estar no formato hexadecimal #RRGGBB (ex.: #38bdf8) ou ficar vazia.");
       return;
     }
     const input = buildInput();
