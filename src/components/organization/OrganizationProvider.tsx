@@ -72,6 +72,12 @@ interface OrganizationContextValue {
   setCollaboratorTypeActive: (id: string, isActive: boolean) => void;
   deleteCollaboratorType: (id: string) => boolean;
   countCollaboratorTypeUsage: (id: string) => number;
+  /**
+   * Resolve nomes de tipos para IDs. Quando `createMissing` é true, cria em
+   * lote os tipos inexistentes (usado pela importação após confirmação).
+   * Retorna um mapa nome (minúsculas) → id.
+   */
+  ensureTypesByName: (names: string[], createMissing: boolean) => Record<string, string>;
 }
 
 const OrganizationContext = createContext<OrganizationContextValue | null>(null);
@@ -87,6 +93,9 @@ function describe(position: OrganizationPosition): string {
 function occupantName(position: OrganizationPosition): string {
   return (position.personName ?? "").trim() || position.positionTitle || "O colaborador";
 }
+
+/** Cores atribuídas em ciclo aos tipos criados automaticamente na importação. */
+const IMPORT_TYPE_COLORS = ["#38bdf8", "#16a34a", "#d97706", "#7c3aed", "#f97316", "#64748b"];
 
 export function OrganizationProvider({ children }: { children: ReactNode }) {
   const [positions, setPositions] = useState<OrganizationPosition[]>([]);
@@ -215,6 +224,19 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
 
       // Histórico detalhado das alterações relevantes.
       const details: string[] = [];
+      const previousPerson = (current.personName ?? "").trim();
+      const nextPerson = input.personName.trim();
+      if (previousPerson !== nextPerson) {
+        details.push(
+          nextPerson
+            ? `ocupante alterado de "${previousPerson || "cargo vago"}" para "${nextPerson}"`
+            : `ocupante "${previousPerson}" removido (cargo vago)`,
+        );
+      }
+      const hadPhoto = Boolean((current.photoUrl ?? "").trim());
+      const hasPhoto = Boolean(input.photoUrl.trim());
+      if (hadPhoto && !hasPhoto) details.push("foto removida");
+      else if (!hadPhoto && hasPhoto) details.push("foto adicionada");
       const previousColor = (current.positionColor ?? "").trim();
       if (previousColor !== input.positionColor.trim()) {
         details.push(
