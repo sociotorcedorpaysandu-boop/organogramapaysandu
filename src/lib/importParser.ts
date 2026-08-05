@@ -249,16 +249,50 @@ export async function parseOrganizationFile(
     missingRequired,
     orphanSuperior,
     cycleCount: orphans.length,
+    unknownTypes: unknownTypeNames.size,
   };
 
-  return { fileName: file.name, sheetName, positions, report };
+  return {
+    fileName: file.name,
+    sheetName,
+    positions,
+    report,
+    typeNamesByPositionId,
+    unknownTypeNames: Array.from(unknownTypeNames).sort((a, b) => a.localeCompare(b, "pt-BR")),
+  };
 }
 
 /* Exportação */
 
-const EXPORT_HEADERS = ["ID", "Nome", "Cargo", "SuperiorID", "TipoLigação", "Tooltip", "Área", "Obs"];
+const EXPORT_HEADERS = [
+  "ID",
+  "Nome",
+  "Cargo",
+  "SuperiorID",
+  "TipoLigação",
+  "Tooltip",
+  "Área",
+  "Obs",
+  "CorCargo",
+  "LayoutSubordinados",
+  "TiposColaborador",
+];
 
-function toExportRows(positions: OrganizationPosition[]): unknown[][] {
+function layoutExportLabel(position: OrganizationPosition): string {
+  if (position.childrenLayout === "horizontal") return "HORIZONTAL";
+  if (position.childrenLayout === "vertical") return "VERTICAL";
+  return "";
+}
+
+function typeNamesOf(position: OrganizationPosition, types: CollaboratorType[]): string {
+  const ids = Array.isArray(position.collaboratorTypeIds) ? position.collaboratorTypeIds : [];
+  return ids
+    .map((id) => types.find((type) => type.id === id)?.name ?? "")
+    .filter(Boolean)
+    .join("; ");
+}
+
+function toExportRows(positions: OrganizationPosition[], types: CollaboratorType[]): unknown[][] {
   const legacyById = new Map(positions.map((p) => [p.id, p.legacyId]));
   return positions.map((p) => [
     p.legacyId,
@@ -269,6 +303,9 @@ function toExportRows(positions: OrganizationPosition[]): unknown[][] {
     p.tooltip,
     p.area,
     p.notes,
+    p.positionColor ?? "",
+    layoutExportLabel(p),
+    typeNamesOf(p, types),
   ]);
 }
 
@@ -276,8 +313,11 @@ function todayStamp(): string {
   return new Date().toISOString().slice(0, 10).replaceAll("-", "");
 }
 
-export function exportToExcel(positions: OrganizationPosition[]): void {
-  const worksheet = XLSX.utils.aoa_to_sheet([EXPORT_HEADERS, ...toExportRows(positions)]);
+export function exportToExcel(
+  positions: OrganizationPosition[],
+  types: CollaboratorType[] = [],
+): void {
+  const worksheet = XLSX.utils.aoa_to_sheet([EXPORT_HEADERS, ...toExportRows(positions, types)]);
   worksheet["!cols"] = [
     { wch: 6 },
     { wch: 28 },
@@ -287,14 +327,20 @@ export function exportToExcel(positions: OrganizationPosition[]): void {
     { wch: 28 },
     { wch: 24 },
     { wch: 16 },
+    { wch: 10 },
+    { wch: 18 },
+    { wch: 28 },
   ];
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "BASE (2)");
   XLSX.writeFile(workbook, `organograma-paysandu-${todayStamp()}.xlsx`);
 }
 
-export function exportToCsv(positions: OrganizationPosition[]): void {
-  const worksheet = XLSX.utils.aoa_to_sheet([EXPORT_HEADERS, ...toExportRows(positions)]);
+export function exportToCsv(
+  positions: OrganizationPosition[],
+  types: CollaboratorType[] = [],
+): void {
+  const worksheet = XLSX.utils.aoa_to_sheet([EXPORT_HEADERS, ...toExportRows(positions, types)]);
   const csv = XLSX.utils.sheet_to_csv(worksheet);
   downloadTextFile(`organograma-paysandu-${todayStamp()}.csv`, csv, "text/csv;charset=utf-8");
 }
