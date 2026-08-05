@@ -1,11 +1,13 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { ArrowUpDown, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { ArrowUpDown, Pencil, Plus, Search, Tags, Trash2, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { PageError } from "@/components/PageError";
 import { EmptyState, PageSkeleton } from "@/components/PageStates";
+import { CollaboratorTypeBadges } from "@/components/organization/CollaboratorTypeBadges";
 import { EditPositionPanel } from "@/components/organization/EditPositionPanel";
 import { useOrganization } from "@/components/organization/OrganizationProvider";
+import { TypeMultiFilter } from "@/components/organization/TypeMultiFilter";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,6 +37,7 @@ import {
 } from "@/components/ui/table";
 import {
   buildPositionIndex,
+  collaboratorTypeIdsOf,
   connectionTypeLabel,
   listAreas,
   positionDisplayName,
@@ -81,12 +84,13 @@ function statusBadgeClass(status: OrganizationPosition["status"]): string {
 }
 
 function PeoplePositionsPage() {
-  const { positions, isLoading, deletePosition } = useOrganization();
+  const { positions, collaboratorTypes, isLoading, deletePosition } = useOrganization();
   const { q } = Route.useSearch();
 
   const [search, setSearch] = useState(q ?? "");
   const [areaFilter, setAreaFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState<SortKey>("positionTitle");
   const [sortAsc, setSortAsc] = useState(true);
   const [page, setPage] = useState(1);
@@ -107,6 +111,11 @@ function PeoplePositionsPage() {
     let result = list.filter((p) => {
       if (areaFilter !== "all" && (p.area ?? "").trim() !== areaFilter) return false;
       if (statusFilter !== "all" && p.status !== statusFilter) return false;
+      // Lógica OU: basta possuir um dos tipos selecionados.
+      if (typeFilter.length > 0) {
+        const ids = collaboratorTypeIdsOf(p);
+        if (!ids.some((id) => typeFilter.includes(id))) return false;
+      }
       if (query) {
         const superior = p.superiorId ? index.get(p.superiorId) : undefined;
         const haystack = `${p.personName} ${p.positionTitle} ${p.area} ${superior?.positionTitle ?? ""} ${superior?.personName ?? ""}`.toLowerCase();
@@ -121,11 +130,11 @@ function PeoplePositionsPage() {
       return sortAsc ? cmp : -cmp;
     });
     return result;
-  }, [list, search, areaFilter, statusFilter, sortKey, sortAsc, index]);
+  }, [list, search, areaFilter, statusFilter, typeFilter, sortKey, sortAsc, index]);
 
   useEffect(() => {
     setPage(1);
-  }, [search, areaFilter, statusFilter]);
+  }, [search, areaFilter, statusFilter, typeFilter]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
@@ -160,10 +169,18 @@ function PeoplePositionsPage() {
             {filtered.length} de {list.length} registro(s) exibidos.
           </p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus className="h-4 w-4" />
-          Novo cargo
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" asChild>
+            <Link to="/tipos-colaboradores">
+              <Tags className="h-4 w-4" />
+              Tipos de colaboradores
+            </Link>
+          </Button>
+          <Button onClick={openCreate}>
+            <Plus className="h-4 w-4" />
+            Novo cargo
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-3">
@@ -201,6 +218,7 @@ function PeoplePositionsPage() {
             <SelectItem value="inactive">Inativo</SelectItem>
           </SelectContent>
         </Select>
+        <TypeMultiFilter types={collaboratorTypes} selected={typeFilter} onChange={setTypeFilter} />
       </div>
 
       {list.length === 0 ? (
@@ -236,6 +254,7 @@ function PeoplePositionsPage() {
                 ))}
                 <TableHead>Superior</TableHead>
                 <TableHead>Ligação</TableHead>
+                <TableHead>Tipos</TableHead>
                 <TableHead>
                   <button
                     type="button"
@@ -251,8 +270,8 @@ function PeoplePositionsPage() {
             </TableHeader>
             <TableBody>
               {pageItems.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
+                 <TableRow>
+                   <TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
                     Nenhum registro corresponde aos filtros aplicados.
                   </TableCell>
                 </TableRow>
@@ -277,6 +296,14 @@ function PeoplePositionsPage() {
                         {superior ? positionDisplayName(superior) : "—"}
                       </TableCell>
                       <TableCell>{connectionTypeLabel(position.connectionType)}</TableCell>
+                      <TableCell>
+                        <CollaboratorTypeBadges
+                          types={collaboratorTypes}
+                          typeIds={collaboratorTypeIdsOf(position)}
+                          compact
+                        />
+                        {collaboratorTypeIdsOf(position).length === 0 ? "—" : null}
+                      </TableCell>
                       <TableCell>
                         <span
                           className={cn(

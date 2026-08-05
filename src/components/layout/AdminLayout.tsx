@@ -1,6 +1,7 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   ArrowDownUp,
+  BarChart3,
   Building2,
   History,
   LayoutDashboard,
@@ -8,6 +9,7 @@ import {
   Menu,
   Network,
   Search,
+  Tags,
   Users,
 } from "lucide-react";
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
@@ -32,7 +34,9 @@ const NAV_ITEMS = [
   { to: "/visao-geral", label: "Visão geral", icon: LayoutDashboard },
   { to: "/organograma", label: "Organograma", icon: Network },
   { to: "/pessoas-cargos", label: "Pessoas e cargos", icon: Users },
+  { to: "/tipos-colaboradores", label: "Tipos de colaboradores", icon: Tags },
   { to: "/areas", label: "Áreas", icon: Building2 },
+  { to: "/quantitativos", label: "Quantitativos", icon: BarChart3 },
   { to: "/importar-exportar", label: "Importar e exportar", icon: ArrowDownUp },
   { to: "/historico", label: "Histórico", icon: History },
 ] as const;
@@ -41,7 +45,9 @@ const PAGE_TITLES: Array<[string, string]> = [
   ["/visao-geral", "Visão geral"],
   ["/organograma", "Organograma"],
   ["/pessoas-cargos", "Pessoas e cargos"],
+  ["/tipos-colaboradores", "Tipos de colaboradores"],
   ["/areas", "Áreas"],
+  ["/quantitativos", "Quantitativos"],
   ["/importar-exportar", "Importar e exportar dados"],
   ["/historico", "Histórico de alterações"],
 ];

@@ -72,6 +72,12 @@ interface OrganizationContextValue {
   setCollaboratorTypeActive: (id: string, isActive: boolean) => void;
   deleteCollaboratorType: (id: string) => boolean;
   countCollaboratorTypeUsage: (id: string) => number;
+  /**
+   * Resolve nomes de tipos para IDs. Quando `createMissing` é true, cria em
+   * lote os tipos inexistentes (usado pela importação após confirmação).
+   * Retorna um mapa nome (minúsculas) → id.
+   */
+  ensureTypesByName: (names: string[], createMissing: boolean) => Record<string, string>;
 }
 
 const OrganizationContext = createContext<OrganizationContextValue | null>(null);
@@ -87,6 +93,9 @@ function describe(position: OrganizationPosition): string {
 function occupantName(position: OrganizationPosition): string {
   return (position.personName ?? "").trim() || position.positionTitle || "O colaborador";
 }
+
+/** Cores atribuídas em ciclo aos tipos criados automaticamente na importação. */
+const IMPORT_TYPE_COLORS = ["#38bdf8", "#16a34a", "#d97706", "#7c3aed", "#f97316", "#64748b"];
 
 export function OrganizationProvider({ children }: { children: ReactNode }) {
   const [positions, setPositions] = useState<OrganizationPosition[]>([]);
@@ -215,6 +224,19 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
 
       // Histórico detalhado das alterações relevantes.
       const details: string[] = [];
+      const previousPerson = (current.personName ?? "").trim();
+      const nextPerson = input.personName.trim();
+      if (previousPerson !== nextPerson) {
+        details.push(
+          nextPerson
+            ? `ocupante alterado de "${previousPerson || "cargo vago"}" para "${nextPerson}"`
+            : `ocupante "${previousPerson}" removido (cargo vago)`,
+        );
+      }
+      const hadPhoto = Boolean((current.photoUrl ?? "").trim());
+      const hasPhoto = Boolean(input.photoUrl.trim());
+      if (hadPhoto && !hasPhoto) details.push("foto removida");
+      else if (!hadPhoto && hasPhoto) details.push("foto adicionada");
       const previousColor = (current.positionColor ?? "").trim();
       if (previousColor !== input.positionColor.trim()) {
         details.push(
@@ -464,6 +486,52 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
     [collaboratorTypes, countCollaboratorTypeUsage, persistTypes, logChange],
   );
 
+  const ensureTypesByName = useCallback(
+    (names: string[], createMissing: boolean): Record<string, string> => {
+      const map: Record<string, string> = {};
+      const missing: string[] = [];
+      const seen = new Set<string>();
+      for (const raw of names) {
+        const name = raw.trim();
+        if (!name) continue;
+        const key = name.toLocaleLowerCase("pt-BR");
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const existing = collaboratorTypes.find(
+          (type) => type.name.trim().toLocaleLowerCase("pt-BR") === key,
+        );
+        if (existing) map[key] = existing.id;
+        else missing.push(name);
+      }
+      if (createMissing && missing.length > 0) {
+        const now = new Date().toISOString();
+        const created: CollaboratorType[] = missing.map((name, index) => ({
+          id: newCollaboratorTypeId(),
+          name,
+          description: "Criado automaticamente na importação.",
+          color: IMPORT_TYPE_COLORS[index % IMPORT_TYPE_COLORS.length],
+          icon: "tag",
+          isActive: true,
+          createdAt: now,
+          updatedAt: now,
+        }));
+        persistTypes([...collaboratorTypes, ...created]);
+        for (const type of created) {
+          map[type.name.trim().toLocaleLowerCase("pt-BR")] = type.id;
+          logChange(
+            "create",
+            `Tipo de colaborador criado pela importação: ${type.name}`,
+            undefined,
+            undefined,
+            type,
+          );
+        }
+      }
+      return map;
+    },
+    [collaboratorTypes, persistTypes, logChange],
+  );
+
   const value = useMemo<OrganizationContextValue>(
     () => ({
       positions,
@@ -485,6 +553,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       setCollaboratorTypeActive,
       deleteCollaboratorType,
       countCollaboratorTypeUsage,
+      ensureTypesByName,
     }),
     [
       positions,
@@ -506,6 +575,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       setCollaboratorTypeActive,
       deleteCollaboratorType,
       countCollaboratorTypeUsage,
+      ensureTypesByName,
     ],
   );
 

@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   exportToCsv,
   exportToExcel,
@@ -49,11 +50,13 @@ export const Route = createFileRoute("/_authenticated/importar-exportar")({
 function ImportExportPage() {
   const {
     positions,
+    collaboratorTypes,
     isLoading,
     replacePositions,
     backupCreatedAt,
     restoreBackup,
     resetToInitialData,
+    ensureTypesByName,
   } = useOrganization();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -61,6 +64,7 @@ function ImportExportPage() {
   const [isParsing, setIsParsing] = useState(false);
   const [confirmRestore, setConfirmRestore] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [createMissingTypes, setCreateMissingTypes] = useState(true);
 
   const list = safePositions(positions);
 
@@ -68,8 +72,9 @@ function ImportExportPage() {
     setIsParsing(true);
     setParsed(null);
     try {
-      const result = await parseOrganizationFile(file);
+      const result = await parseOrganizationFile(file, collaboratorTypes);
       setParsed(result);
+      setCreateMissingTypes(true);
       if (result.positions.length === 0) {
         toast.error("Nenhum registro válido encontrado no arquivo.");
       }
@@ -88,8 +93,25 @@ function ImportExportPage() {
 
   function confirmImport() {
     if (!parsed) return;
+    // Relaciona tipos existentes pelo nome; cria os inexistentes somente após confirmação.
+    const allNames = Array.from(new Set(Array.from(parsed.typeNamesByPositionId.values()).flat()));
+    const nameToId = ensureTypesByName(allNames, createMissingTypes);
+    const nextPositions = parsed.positions.map((position) => {
+      const names = parsed.typeNamesByPositionId.get(position.id);
+      if (!names || names.length === 0) return position;
+      const extraIds = names
+        .map((name) => nameToId[name.trim().toLocaleLowerCase("pt-BR")])
+        .filter((id): id is string => Boolean(id));
+      if (extraIds.length === 0) return position;
+      return {
+        ...position,
+        collaboratorTypeIds: Array.from(
+          new Set([...(position.collaboratorTypeIds ?? []), ...extraIds]),
+        ),
+      };
+    });
     replacePositions(
-      parsed.positions,
+      nextPositions,
       `Importação do arquivo "${parsed.fileName}" (aba ${parsed.sheetName}, ${parsed.report.validRows} registros).`,
     );
     setParsed(null);
@@ -106,6 +128,7 @@ function ImportExportPage() {
         { label: "Campos obrigatórios vazios", value: parsed.report.missingRequired },
         { label: "Superior inexistente", value: parsed.report.orphanSuperior },
         { label: "Possíveis ciclos", value: parsed.report.cycleCount },
+        { label: "Tipos sem cadastro", value: parsed.report.unknownTypes },
       ]
     : [];
 
@@ -173,6 +196,23 @@ function ImportExportPage() {
                     </div>
                   ))}
                 </div>
+                {parsed.unknownTypeNames.length > 0 ? (
+                  <label className="flex cursor-pointer items-start gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2.5 text-sm text-foreground">
+                    <Checkbox
+                      checked={createMissingTypes}
+                      onCheckedChange={(checked) => setCreateMissingTypes(checked === true)}
+                      aria-label="Criar tipos inexistentes"
+                      className="mt-0.5"
+                    />
+                    <span>
+                      <span className="font-medium">
+                        Tipos sem cadastro: {parsed.unknownTypeNames.join(", ")}.
+                      </span>{" "}
+                      Marque para criar automaticamente na importação; desmarque para importar sem
+                      essas associações.
+                    </span>
+                  </label>
+                ) : null}
                 <div className="flex flex-wrap gap-2">
                   <Button onClick={confirmImport} disabled={parsed.positions.length === 0}>
                     Substituir a base
@@ -196,11 +236,19 @@ function ImportExportPage() {
               <CardDescription>Baixe a base atual nos formatos disponíveis.</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={() => exportToExcel(list)} disabled={list.length === 0}>
+              <Button
+                variant="outline"
+                onClick={() => exportToExcel(list, collaboratorTypes)}
+                disabled={list.length === 0}
+              >
                 <FileSpreadsheet className="h-4 w-4" />
                 Exportar Excel
               </Button>
-              <Button variant="outline" onClick={() => exportToCsv(list)} disabled={list.length === 0}>
+              <Button
+                variant="outline"
+                onClick={() => exportToCsv(list, collaboratorTypes)}
+                disabled={list.length === 0}
+              >
                 <FileText className="h-4 w-4" />
                 Exportar CSV
               </Button>

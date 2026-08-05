@@ -18,6 +18,8 @@ import { Route as AuthenticatedHistoricoRouteImport } from './routes/_authentica
 import { Route as AuthenticatedImportarExportarRouteImport } from './routes/_authenticated/importar-exportar'
 import { Route as AuthenticatedOrganogramaRouteImport } from './routes/_authenticated/organograma'
 import { Route as AuthenticatedPessoasCargosRouteImport } from './routes/_authenticated/pessoas-cargos'
+import { Route as AuthenticatedQuantitativosRouteImport } from './routes/_authenticated/quantitativos'
+import { Route as AuthenticatedTiposColaboradoresRouteImport } from './routes/_authenticated/tipos-colaboradores'
 import { Route as AuthenticatedVisaoGeralRouteImport } from './routes/_authenticated/visao-geral'
 import { Route as ColaboradorIdRouteImport } from './routes/colaborador.$id'
 
@@ -68,6 +70,18 @@ const AuthenticatedPessoasCargosRoute =
     path: '/pessoas-cargos',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedQuantitativosRoute =
+  AuthenticatedQuantitativosRouteImport.update({
+    id: '/quantitativos',
+    path: '/quantitativos',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedTiposColaboradoresRoute =
+  AuthenticatedTiposColaboradoresRouteImport.update({
+    id: '/tipos-colaboradores',
+    path: '/tipos-colaboradores',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedVisaoGeralRoute = AuthenticatedVisaoGeralRouteImport.update({
   id: '/visao-geral',
   path: '/visao-geral',
@@ -88,6 +102,8 @@ export interface FileRoutesByFullPath {
   '/importar-exportar': typeof AuthenticatedImportarExportarRoute
   '/organograma': typeof AuthenticatedOrganogramaRoute
   '/pessoas-cargos': typeof AuthenticatedPessoasCargosRoute
+  '/quantitativos': typeof AuthenticatedQuantitativosRoute
+  '/tipos-colaboradores': typeof AuthenticatedTiposColaboradoresRoute
   '/visao-geral': typeof AuthenticatedVisaoGeralRoute
   '/colaborador/$id': typeof ColaboradorIdRoute
 }
@@ -99,6 +115,8 @@ export interface FileRoutesByTo {
   '/importar-exportar': typeof AuthenticatedImportarExportarRoute
   '/organograma': typeof AuthenticatedOrganogramaRoute
   '/pessoas-cargos': typeof AuthenticatedPessoasCargosRoute
+  '/quantitativos': typeof AuthenticatedQuantitativosRoute
+  '/tipos-colaboradores': typeof AuthenticatedTiposColaboradoresRoute
   '/visao-geral': typeof AuthenticatedVisaoGeralRoute
   '/colaborador/$id': typeof ColaboradorIdRoute
   '/': typeof AuthenticatedIndexRoute
@@ -113,6 +131,8 @@ export interface FileRoutesById {
   '/_authenticated/importar-exportar': typeof AuthenticatedImportarExportarRoute
   '/_authenticated/organograma': typeof AuthenticatedOrganogramaRoute
   '/_authenticated/pessoas-cargos': typeof AuthenticatedPessoasCargosRoute
+  '/_authenticated/quantitativos': typeof AuthenticatedQuantitativosRoute
+  '/_authenticated/tipos-colaboradores': typeof AuthenticatedTiposColaboradoresRoute
   '/_authenticated/visao-geral': typeof AuthenticatedVisaoGeralRoute
   '/colaborador/$id': typeof ColaboradorIdRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
@@ -128,6 +148,8 @@ export interface FileRouteTypes {
     | '/importar-exportar'
     | '/organograma'
     | '/pessoas-cargos'
+    | '/quantitativos'
+    | '/tipos-colaboradores'
     | '/visao-geral'
     | '/colaborador/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -139,6 +161,8 @@ export interface FileRouteTypes {
     | '/importar-exportar'
     | '/organograma'
     | '/pessoas-cargos'
+    | '/quantitativos'
+    | '/tipos-colaboradores'
     | '/visao-geral'
     | '/colaborador/$id'
     | '/'
@@ -152,6 +176,8 @@ export interface FileRouteTypes {
     | '/_authenticated/importar-exportar'
     | '/_authenticated/organograma'
     | '/_authenticated/pessoas-cargos'
+    | '/_authenticated/quantitativos'
+    | '/_authenticated/tipos-colaboradores'
     | '/_authenticated/visao-geral'
     | '/colaborador/$id'
     | '/_authenticated/'
@@ -229,6 +255,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPessoasCargosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/quantitativos': {
+      id: '/_authenticated/quantitativos'
+      path: '/quantitativos'
+      fullPath: '/quantitativos'
+      preLoaderRoute: typeof AuthenticatedQuantitativosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/tipos-colaboradores': {
+      id: '/_authenticated/tipos-colaboradores'
+      path: '/tipos-colaboradores'
+      fullPath: '/tipos-colaboradores'
+      preLoaderRoute: typeof AuthenticatedTiposColaboradoresRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/visao-geral': {
       id: '/_authenticated/visao-geral'
       path: '/visao-geral'
@@ -252,6 +292,8 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedImportarExportarRoute: typeof AuthenticatedImportarExportarRoute
   AuthenticatedOrganogramaRoute: typeof AuthenticatedOrganogramaRoute
   AuthenticatedPessoasCargosRoute: typeof AuthenticatedPessoasCargosRoute
+  AuthenticatedQuantitativosRoute: typeof AuthenticatedQuantitativosRoute
+  AuthenticatedTiposColaboradoresRoute: typeof AuthenticatedTiposColaboradoresRoute
   AuthenticatedVisaoGeralRoute: typeof AuthenticatedVisaoGeralRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
 }
@@ -262,6 +304,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedImportarExportarRoute: AuthenticatedImportarExportarRoute,
   AuthenticatedOrganogramaRoute: AuthenticatedOrganogramaRoute,
   AuthenticatedPessoasCargosRoute: AuthenticatedPessoasCargosRoute,
+  AuthenticatedQuantitativosRoute: AuthenticatedQuantitativosRoute,
+  AuthenticatedTiposColaboradoresRoute: AuthenticatedTiposColaboradoresRoute,
   AuthenticatedVisaoGeralRoute: AuthenticatedVisaoGeralRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
 }
