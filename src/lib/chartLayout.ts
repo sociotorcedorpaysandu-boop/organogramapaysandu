@@ -10,7 +10,10 @@ import type { ChildrenLayout, OrganizationPosition } from "@/types/organization"
  * organizadas sem alterar a hierarquia real.
  *
  * Disposição dos subordinados (por responsável):
- * - horizontal: irmãos lado a lado no mesmo nível (quebra em linhas se largo);
+ * - horizontal (manual): todos os irmãos lado a lado em uma única linha, sem
+ *   quebra automática — o canvas amplia horizontalmente (zoom e rolagem);
+ * - horizontal (automático): irmãos lado a lado, com quebra em linhas
+ *   organizadas quando a largura supera MAX_ROW_WIDTH;
  * - vertical: irmãos em uma lista vertical contínua, todos ligados diretamente
  *   ao mesmo responsável (nunca um ao outro).
  * A escolha pode ser manual (cargo a cargo) ou automática pela quantidade de
@@ -21,7 +24,7 @@ const H_GAP = 44; // espaço horizontal entre cartões/subárvores
 const V_GAP = 96; // espaço vertical entre níveis
 const ROW_GAP = 64; // espaço vertical entre linhas de uma mesma geração
 const ROOT_GAP = 80; // espaço entre raízes (árvores distintas)
-const MAX_ROW_WIDTH = 1560; // largura máxima de uma linha de subordinados
+const MAX_ROW_WIDTH = 1560; // largura máxima de linha (somente modo automático)
 const VLIST_INDENT = 48; // deslocamento da lista vertical à direita do tronco do responsável
 const VLIST_GAP = 20; // espaço vertical compacto entre itens da lista vertical
 
@@ -120,6 +123,21 @@ export function layoutHierarchy(
         const block = blockOf(kid.id);
         return { kids: [kid], width: block.width, height: block.height };
       });
+      rowsCache.set(id, rows);
+      return rows;
+    }
+
+    // Horizontal manual: linha única com todos os subordinados, sem quebra
+    // por largura — o canvas amplia horizontalmente.
+    if (byId.get(id)?.childrenLayout === "horizontal") {
+      if (kids.length === 0) {
+        rowsCache.set(id, []);
+        return [];
+      }
+      const width =
+        kids.reduce((sum, kid) => sum + blockOf(kid.id).width, 0) + H_GAP * (kids.length - 1);
+      const height = Math.max(...kids.map((kid) => blockOf(kid.id).height));
+      const rows = [{ kids, width, height }];
       rowsCache.set(id, rows);
       return rows;
     }

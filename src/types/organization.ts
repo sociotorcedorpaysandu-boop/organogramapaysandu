@@ -77,4 +77,6 @@ export interface ImportReport {
   missingRequired: number;
   orphanSuperior: number;
   cycleCount: number;
+  /** Nomes de tipos de colaborador encontrados na planilha sem cadastro. */
+  unknownTypes: number;
 }
