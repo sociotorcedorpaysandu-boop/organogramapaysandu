@@ -553,6 +553,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       setCollaboratorTypeActive,
       deleteCollaboratorType,
       countCollaboratorTypeUsage,
+      ensureTypesByName,
     }),
     [
       positions,
@@ -574,6 +575,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       setCollaboratorTypeActive,
       deleteCollaboratorType,
       countCollaboratorTypeUsage,
+      ensureTypesByName,
     ],
   );
 
