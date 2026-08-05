@@ -8,14 +8,16 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { initialPositions } from "@/data/initialPositions";
+import { CollaboratorTypeBadges } from "@/components/organization/CollaboratorTypeBadges";
 import {
+  collaboratorTypeIdsOf,
   connectionTypeLabel,
   positionDisplayName,
   safePositions,
   statusLabel,
 } from "@/lib/organization";
 import { personInitials } from "@/lib/photo";
-import { getPositions } from "@/services/organizationStorageService";
+import { getCollaboratorTypes, getPositions } from "@/services/organizationStorageService";
 import type { OrganizationPosition } from "@/types/organization";
 
 export const Route = createFileRoute("/colaborador/$id")({
@@ -59,10 +61,12 @@ function ColaboradorPage() {
   const { id } = Route.useParams();
 
   const positions = useMemo(() => safePositions(getPositions() ?? initialPositions), []);
+  const collaboratorTypes = useMemo(() => getCollaboratorTypes(), []);
   const position = useMemo(() => positions.find((p) => p.id === id) ?? null, [positions, id]);
   const superior = position?.superiorId
     ? (positions.find((p) => p.id === position.superiorId) ?? null)
     : null;
+  const typeIds = position ? collaboratorTypeIdsOf(position) : [];
 
   return (
     <div className="min-h-screen bg-background">
@@ -140,6 +144,11 @@ function ColaboradorPage() {
                     <Building2 className="h-4 w-4" />
                     {position.area?.trim() || "Sem área definida"}
                   </p>
+                  {position.status === "occupied" && typeIds.length > 0 ? (
+                    <div className="mt-3 flex justify-center sm:justify-start">
+                      <CollaboratorTypeBadges types={collaboratorTypes} typeIds={typeIds} />
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
