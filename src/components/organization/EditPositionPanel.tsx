@@ -89,11 +89,13 @@ export function EditPositionPanel({
   const [selectedTypeIds, setSelectedTypeIds] = useState<string[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [photoLoading, setPhotoLoading] = useState(false);
+  const [occupantChanged, setOccupantChanged] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setFormError(null);
     setPhotoLoading(false);
+    setOccupantChanged(false);
     if (position) {
       setPersonName(position.personName);
       setPhotoUrl(position.photoUrl ?? "");
@@ -186,6 +188,23 @@ export function EditPositionPanel({
     setSelectedTypeIds((prev) =>
       prev.includes(typeId) ? prev.filter((id) => id !== typeId) : [...prev, typeId],
     );
+  }
+
+  /**
+   * Troca de ocupante: ao substituir a pessoa, os tipos e a foto do ocupante
+   * anterior não são herdados — limpa por padrão e o administrador confirma
+   * os tipos do novo ocupante. Alterações de cargo, área ou superior mantêm
+   * os tipos intactos.
+   */
+  function handlePersonNameChange(value: string) {
+    setPersonName(value);
+    if (isCreate || !position) return;
+    const original = (position.personName ?? "").trim();
+    if (original && value.trim() !== original && !occupantChanged) {
+      setOccupantChanged(true);
+      setSelectedTypeIds([]);
+      setPhotoUrl("");
+    }
   }
 
   function handleSave() {
@@ -310,10 +329,19 @@ export function EditPositionPanel({
               <Input
                 id="edit-person-name"
                 value={personName}
-                onChange={(e) => setPersonName(e.target.value)}
+                onChange={(e) => handlePersonNameChange(e.target.value)}
                 placeholder="Deixe vazio para cargo vago"
               />
             </div>
+
+            {occupantChanged &&
+            position &&
+            personName.trim() !== (position.personName ?? "").trim() ? (
+              <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+                Troca de ocupante: a foto e os tipos do ocupante anterior foram removidos. Confirme
+                os tipos do novo ocupante antes de salvar.
+              </p>
+            ) : null}
 
             <div className="space-y-1.5">
               <Label htmlFor="edit-area">Área</Label>
