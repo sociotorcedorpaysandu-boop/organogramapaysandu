@@ -120,6 +120,26 @@ function PeoplePositionsPage() {
   const index = useMemo(() => buildPositionIndex(list), [list]);
   const areas = useMemo(() => listAreas(list), [list]);
 
+  // Dados do diálogo de exclusão com subordinados.
+  const deletingChildren = useMemo(
+    () => (deleting ? list.filter((p) => p.superiorId === deleting.id) : []),
+    [deleting, list],
+  );
+  const deletingSuperior = deleting?.superiorId ? index.get(deleting.superiorId) : undefined;
+  const customSuperiorCandidates = useMemo(() => {
+    if (!deleting) return [];
+    const descendants = getDescendantIds(deleting.id, list);
+    return list
+      .filter((p) => p.id !== deleting.id && !descendants.has(p.id))
+      .sort((a, b) => a.displayOrder - b.displayOrder);
+  }, [deleting, list]);
+
+  useEffect(() => {
+    // Restaura a escolha padrão sempre que um novo cargo é selecionado para excluir.
+    setSubChoice(deleting?.superiorId ? "parent" : "none");
+    setCustomSuperiorId("");
+  }, [deleting]);
+
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     let result = list.filter((p) => {
