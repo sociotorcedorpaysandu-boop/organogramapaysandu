@@ -45,6 +45,17 @@ export interface PositionInput {
   collaboratorTypeIds: string[];
 }
 
+/** Destino dos subordinados diretos ao excluir um cargo. */
+export interface DeletePositionOptions {
+  /**
+   * "none" = deixar sem superior (padrão);
+   * "parent" = transferir para o superior atual do cargo excluído;
+   * "custom" = transferir para outro superior selecionado.
+   */
+  subordinates?: "none" | "parent" | "custom";
+  customSuperiorId?: string | null;
+}
+
 export interface CollaboratorTypeInput {
   name: string;
   description: string;
@@ -61,7 +72,7 @@ interface OrganizationContextValue {
   backupCreatedAt: string | null;
   addPosition: (input: PositionInput) => OrganizationPosition | null;
   updatePosition: (id: string, input: PositionInput) => boolean;
-  deletePosition: (id: string) => void;
+  deletePosition: (id: string, options?: DeletePositionOptions) => void;
   markAsVacant: (id: string) => void;
   deactivatePosition: (id: string) => void;
   replacePositions: (positions: OrganizationPosition[], description: string) => void;
