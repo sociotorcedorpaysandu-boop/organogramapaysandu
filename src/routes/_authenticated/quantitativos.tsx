@@ -290,12 +290,15 @@ function QuantitativosPage() {
         <TypeMultiFilter types={collaboratorTypes} selected={typeFilter} onChange={setTypeFilter} />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {indicators.map((item) => (
           <Card key={item.label}>
             <CardContent className="p-4">
               <p className="text-2xl font-extrabold tabular-nums text-foreground">{item.value}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">{item.label}</p>
+              <p className="mt-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+                {item.scope === "global" ? "Base completa" : "Respeita os filtros"}
+              </p>
             </CardContent>
           </Card>
         ))}
