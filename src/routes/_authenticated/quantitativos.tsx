@@ -110,8 +110,25 @@ function QuantitativosPage() {
     [collaboratorTypes],
   );
   const typeCounts = useMemo(() => computeTypeCounts(filtered), [filtered]);
-  const classifiedTotal = useMemo(
+  // Colaboradores com pelo menos um tipo (cada pessoa conta uma única vez).
+  const collaboratorsWithType = useMemo(
+    () =>
+      filtered.filter(
+        (position) =>
+          position.status === "occupied" &&
+          (position.personName ?? "").trim() &&
+          collaboratorTypeIdsOf(position).length > 0,
+      ).length,
+    [filtered],
+  );
+  // Soma total das associações (uma pessoa com vários tipos conta em cada um).
+  const typeAssociationsTotal = useMemo(
     () => Array.from(typeCounts.values()).reduce((sum, count) => sum + count, 0),
+    [typeCounts],
+  );
+  // Tipos que possuem pelo menos um colaborador no recorte filtrado.
+  const typesInScope = useMemo(
+    () => Array.from(typeCounts.values()).filter((count) => count > 0).length,
     [typeCounts],
   );
   const byPosition = useMemo(() => computePositionQuantities(filtered), [filtered]);
