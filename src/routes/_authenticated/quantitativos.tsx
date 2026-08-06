@@ -148,14 +148,16 @@ function QuantitativosPage() {
     areaFilter !== "all" || cargoFilter !== "all" || statusFilter !== "all" || typeFilter.length > 0;
 
   const indicators = [
-    { label: "Total de cargos", value: stats.total },
-    { label: "Posições ocupadas", value: stats.occupied },
-    { label: "Cargos vagos", value: stats.vacant },
-    { label: "Colaboradores", value: collaborators },
-    { label: "Áreas", value: stats.areas },
-    { label: "Tipos ativos", value: activeTypes },
-    { label: "Colaboradores classificados por tipo", value: classifiedTotal },
-    { label: "Registros sem superior", value: stats.withoutSuperior },
+    { label: "Total de cargos", value: stats.total, scope: "recorte" },
+    { label: "Posições ocupadas", value: stats.occupied, scope: "recorte" },
+    { label: "Cargos vagos", value: stats.vacant, scope: "recorte" },
+    { label: "Colaboradores", value: collaborators, scope: "recorte" },
+    { label: "Áreas", value: stats.areas, scope: "recorte" },
+    { label: "Tipos ativos cadastrados", value: activeTypes, scope: "global" },
+    { label: "Tipos encontrados no recorte", value: typesInScope, scope: "recorte" },
+    { label: "Colaboradores com tipo", value: collaboratorsWithType, scope: "recorte" },
+    { label: "Associações com tipos", value: typeAssociationsTotal, scope: "recorte" },
+    { label: "Registros sem superior", value: stats.withoutSuperior, scope: "recorte" },
   ];
 
   function indicatorRows(): unknown[][] {
