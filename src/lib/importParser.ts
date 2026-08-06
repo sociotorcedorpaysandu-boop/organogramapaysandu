@@ -1,6 +1,5 @@
 import * as XLSX from "xlsx";
 
-import { categorizePositions } from "@/lib/organization";
 import { normalizeHexColor } from "@/lib/positionColor";
 import type {
   ChildrenLayout,
@@ -85,6 +84,32 @@ function splitTypeNames(value: unknown): string[] {
     .split(";")
     .map((name) => name.trim())
     .filter(Boolean);
+}
+
+/**
+ * Detecção específica de ciclos hierárquicos: conta os registros cuja cadeia
+ * de superiores retorna a um registro já visitado. Superiores inexistentes
+ * interrompem a cadeia e NÃO são contados como ciclo.
+ */
+function countCyclicPositions(positions: OrganizationPosition[]): number {
+  const index = new Map(positions.map((p) => [p.id, p]));
+  let cyclic = 0;
+  for (const position of positions) {
+    if (!position.superiorId || !index.has(position.superiorId)) continue;
+    const seen = new Set<string>([position.id]);
+    let current: string | null = position.superiorId;
+    let steps = 0;
+    while (current && steps <= positions.length) {
+      if (seen.has(current)) {
+        cyclic += 1;
+        break;
+      }
+      seen.add(current);
+      current = index.get(current)?.superiorId ?? null;
+      steps += 1;
+    }
+  }
+  return cyclic;
 }
 
 export async function parseOrganizationFile(
@@ -218,7 +243,7 @@ export async function parseOrganizationFile(
   // Resolve superiorId somente quando o ID existe na base importada.
   const idByLegacy = new Map(positions.map((p) => [p.legacyId, p.id]));
   let missingSuperior = 0;
-  let missingRequired = 0;
+  let selfReferences = 0;
   for (const position of positions) {
     const superiorLegacy = pendingSuperior.get(position.id);
     if (superiorLegacy === undefined) {
@@ -230,15 +255,12 @@ export async function parseOrganizationFile(
       position.superiorId = resolved;
     } else {
       if (!resolved) orphanSuperior += 1;
+      else selfReferences += 1; // superior apontando para o próprio registro = ciclo
       position.superiorId = null;
-      missingSuperior += 1;
     }
-    if (!position.positionTitle || !position.area) missingRequired += 1;
   }
-  // missingRequired precisa contar também registros sem superior já contados acima
-  missingRequired = positions.filter((p) => !p.positionTitle || !p.area).length;
-
-  const { orphans } = categorizePositions(positions);
+  // Campos obrigatórios vazios (cargo ou área), contados sobre todos os registros.
+  const missingRequired = positions.filter((p) => !p.positionTitle || !p.area).length;
 
   const report: ImportReport = {
     sheetName,
@@ -248,7 +270,7 @@ export async function parseOrganizationFile(
     duplicateIds,
     missingRequired,
     orphanSuperior,
-    cycleCount: orphans.length,
+    cycleCount: countCyclicPositions(positions) + selfReferences,
     unknownTypes: unknownTypeNames.size,
   };
 

@@ -19,7 +19,17 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -39,6 +49,7 @@ import {
   buildPositionIndex,
   collaboratorTypeIdsOf,
   connectionTypeLabel,
+  getDescendantIds,
   listAreas,
   positionDisplayName,
   safePositions,
@@ -84,7 +95,8 @@ function statusBadgeClass(status: OrganizationPosition["status"]): string {
 }
 
 function PeoplePositionsPage() {
-  const { positions, collaboratorTypes, isLoading, deletePosition } = useOrganization();
+  const { positions, collaboratorTypes, isLoading, deletePosition, deactivatePosition } =
+    useOrganization();
   const { q } = Route.useSearch();
 
   const [search, setSearch] = useState(q ?? "");
@@ -97,6 +109,8 @@ function PeoplePositionsPage() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [editing, setEditing] = useState<OrganizationPosition | null>(null);
   const [deleting, setDeleting] = useState<OrganizationPosition | null>(null);
+  const [subChoice, setSubChoice] = useState<"parent" | "custom" | "none">("parent");
+  const [customSuperiorId, setCustomSuperiorId] = useState("");
 
   useEffect(() => {
     if (q) setSearch(q);
@@ -105,6 +119,26 @@ function PeoplePositionsPage() {
   const list = safePositions(positions);
   const index = useMemo(() => buildPositionIndex(list), [list]);
   const areas = useMemo(() => listAreas(list), [list]);
+
+  // Dados do diálogo de exclusão com subordinados.
+  const deletingChildren = useMemo(
+    () => (deleting ? list.filter((p) => p.superiorId === deleting.id) : []),
+    [deleting, list],
+  );
+  const deletingSuperior = deleting?.superiorId ? index.get(deleting.superiorId) : undefined;
+  const customSuperiorCandidates = useMemo(() => {
+    if (!deleting) return [];
+    const descendants = getDescendantIds(deleting.id, list);
+    return list
+      .filter((p) => p.id !== deleting.id && !descendants.has(p.id))
+      .sort((a, b) => a.displayOrder - b.displayOrder);
+  }, [deleting, list]);
+
+  useEffect(() => {
+    // Restaura a escolha padrão sempre que um novo cargo é selecionado para excluir.
+    setSubChoice(deleting?.superiorId ? "parent" : "none");
+    setCustomSuperiorId("");
+  }, [deleting]);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -156,6 +190,23 @@ function PeoplePositionsPage() {
   function openCreate() {
     setEditing(null);
     setPanelOpen(true);
+  }
+
+  function confirmDelete() {
+    if (!deleting) return;
+    if (deletingChildren.length === 0) {
+      deletePosition(deleting.id);
+    } else if (subChoice === "parent") {
+      deletePosition(deleting.id, { subordinates: "parent" });
+    } else if (subChoice === "custom") {
+      deletePosition(deleting.id, {
+        subordinates: "custom",
+        customSuperiorId: customSuperiorId || null,
+      });
+    } else {
+      deletePosition(deleting.id, { subordinates: "none" });
+    }
+    setDeleting(null);
   }
 
   if (isLoading) return <PageSkeleton />;
@@ -369,29 +420,129 @@ function PeoplePositionsPage() {
 
       <EditPositionPanel open={panelOpen} onOpenChange={setPanelOpen} position={editing} />
 
-      <AlertDialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
+      {/* Exclusão simples: cargo sem subordinados */}
+      <AlertDialog
+        open={deleting !== null && deletingChildren.length === 0}
+        onOpenChange={(open) => !open && setDeleting(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir cargo</AlertDialogTitle>
             <AlertDialogDescription>
               Tem certeza que deseja excluir{" "}
-              <strong>{deleting ? positionDisplayName(deleting) : ""}</strong>? Os subordinados
-              diretos ficarão sem superior definido. Esta ação não pode ser desfeita.
+              <strong>{deleting ? positionDisplayName(deleting) : ""}</strong>? Esta ação não pode
+              ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (deleting) deletePosition(deleting.id);
-                setDeleting(null);
-              }}
-            >
-              Excluir
-            </AlertDialogAction>
+            <AlertDialogAction onClick={confirmDelete}>Excluir</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Exclusão com impacto: cargo com subordinados */}
+      <Dialog
+        open={deleting !== null && deletingChildren.length > 0}
+        onOpenChange={(open) => !open && setDeleting(null)}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Excluir cargo com subordinados</DialogTitle>
+            <DialogDescription>
+              <strong>{deleting ? positionDisplayName(deleting) : ""}</strong> possui{" "}
+              {deletingChildren.length} subordinado(s). Escolha o que fazer com eles.
+            </DialogDescription>
+          </DialogHeader>
+
+          <RadioGroup
+            value={subChoice}
+            onValueChange={(value) => setSubChoice(value as "parent" | "custom" | "none")}
+            className="space-y-3"
+          >
+            <div className="flex items-start gap-2">
+              <RadioGroupItem
+                value="parent"
+                id="sub-parent"
+                disabled={!deleting?.superiorId}
+                className="mt-0.5"
+              />
+              <Label
+                htmlFor="sub-parent"
+                className={cn("font-normal", !deleting?.superiorId && "opacity-50")}
+              >
+                Transferir para o superior atual do cargo
+                {deletingSuperior ? (
+                  <span className="block text-xs text-muted-foreground">
+                    {positionDisplayName(deletingSuperior)}
+                  </span>
+                ) : (
+                  <span className="block text-xs text-muted-foreground">
+                    Este cargo não possui superior definido.
+                  </span>
+                )}
+              </Label>
+            </div>
+
+            <div className="flex items-start gap-2">
+              <RadioGroupItem value="custom" id="sub-custom" className="mt-0.5" />
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="sub-custom" className="font-normal">
+                  Selecionar outro superior
+                </Label>
+                {subChoice === "custom" ? (
+                  <Select value={customSuperiorId} onValueChange={setCustomSuperiorId}>
+                    <SelectTrigger aria-label="Novo superior dos subordinados">
+                      <SelectValue placeholder="Escolha o novo superior…" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-64">
+                      {customSuperiorCandidates.map((candidate) => (
+                        <SelectItem key={candidate.id} value={candidate.id}>
+                          {positionDisplayName(candidate)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2">
+              <RadioGroupItem value="none" id="sub-none" className="mt-0.5" />
+              <Label htmlFor="sub-none" className="font-normal">
+                Deixar sem superior
+                <span className="block text-xs text-muted-foreground">
+                  Os subordinados ficam sem vínculo hierárquico definido.
+                </span>
+              </Label>
+            </div>
+          </RadioGroup>
+
+          <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (deleting) deactivatePosition(deleting.id);
+                setDeleting(null);
+              }}
+            >
+              Desativar o cargo em vez de excluir
+            </Button>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setDeleting(null)}>
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={confirmDelete}
+                disabled={subChoice === "custom" && !customSuperiorId}
+              >
+                Excluir cargo
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

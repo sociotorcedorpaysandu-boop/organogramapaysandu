@@ -45,6 +45,17 @@ export interface PositionInput {
   collaboratorTypeIds: string[];
 }
 
+/** Destino dos subordinados diretos ao excluir um cargo. */
+export interface DeletePositionOptions {
+  /**
+   * "none" = deixar sem superior (padrão);
+   * "parent" = transferir para o superior atual do cargo excluído;
+   * "custom" = transferir para outro superior selecionado.
+   */
+  subordinates?: "none" | "parent" | "custom";
+  customSuperiorId?: string | null;
+}
+
 export interface CollaboratorTypeInput {
   name: string;
   description: string;
@@ -61,7 +72,7 @@ interface OrganizationContextValue {
   backupCreatedAt: string | null;
   addPosition: (input: PositionInput) => OrganizationPosition | null;
   updatePosition: (id: string, input: PositionInput) => boolean;
-  deletePosition: (id: string) => void;
+  deletePosition: (id: string, options?: DeletePositionOptions) => void;
   markAsVacant: (id: string) => void;
   deactivatePosition: (id: string) => void;
   replacePositions: (positions: OrganizationPosition[], description: string) => void;
@@ -92,6 +103,19 @@ function describe(position: OrganizationPosition): string {
 
 function occupantName(position: OrganizationPosition): string {
   return (position.personName ?? "").trim() || position.positionTitle || "O colaborador";
+}
+
+/**
+ * Normaliza nomes de tipos para comparação: ignora maiúsculas/minúsculas,
+ * acentos e espaços duplicados.
+ */
+function normalizeTypeName(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("pt-BR");
 }
 
 /** Cores atribuídas em ciclo aos tipos criados automaticamente na importação. */
@@ -278,23 +302,51 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
   );
 
   const deletePosition = useCallback(
-    (id: string) => {
+    (id: string, options?: DeletePositionOptions) => {
       const list = safePositions(positions);
       const current = list.find((p) => p.id === id);
       if (!current) return;
       const descendants = getDescendantIds(id, list);
-      // Subordinados diretos passam a ficar sem superior definido, sem quebrar a árvore.
+      const directChildren = list.filter((p) => p.superiorId === id).length;
+
+      // Destino dos subordinados diretos (padrão: ficam sem superior definido).
+      let targetSuperior: string | null = null;
+      if (options?.subordinates === "parent") {
+        targetSuperior = current.superiorId;
+      } else if (options?.subordinates === "custom") {
+        const candidate = options.customSuperiorId ?? null;
+        // Evita ciclo: ignora o próprio cargo, subordinados ou IDs inexistentes.
+        if (
+          candidate &&
+          candidate !== id &&
+          !descendants.has(candidate) &&
+          list.some((p) => p.id === candidate)
+        ) {
+          targetSuperior = candidate;
+        }
+      }
+
       const next = list
         .filter((p) => p.id !== id)
         .map((p) =>
           p.superiorId === id
-            ? { ...p, superiorId: null, updatedAt: new Date().toISOString() }
+            ? { ...p, superiorId: targetSuperior, updatedAt: new Date().toISOString() }
             : p,
         );
       persist(next);
+
+      let subordinatesNote = "";
+      if (directChildren > 0) {
+        if (targetSuperior) {
+          const target = list.find((p) => p.id === targetSuperior);
+          subordinatesNote = ` (${directChildren} subordinado(s) transferidos para ${target ? describe(target) : "outro superior"})`;
+        } else {
+          subordinatesNote = ` (${directChildren} subordinado(s) mantidos sem superior)`;
+        }
+      }
       logChange(
         "delete",
-        `Cargo excluído: ${describe(current)}${descendants.size > 0 ? ` (${descendants.size} subordinado(s) mantidos sem superior)` : ""}`,
+        `Cargo excluído: ${describe(current)}${subordinatesNote}`,
         id,
         current,
         undefined,
@@ -431,6 +483,13 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       const name = input.name.trim();
       if (!name) {
         toast.error("Informe o nome do tipo de colaborador.");
+        return false;
+      }
+      const duplicated = collaboratorTypes.some(
+        (type) => type.id !== id && normalizeTypeName(type.name) === normalizeTypeName(name),
+      );
+      if (duplicated) {
+        toast.error("Já existe outro tipo de colaborador com este nome.");
         return false;
       }
       const updated: CollaboratorType = {

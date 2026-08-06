@@ -110,8 +110,25 @@ function QuantitativosPage() {
     [collaboratorTypes],
   );
   const typeCounts = useMemo(() => computeTypeCounts(filtered), [filtered]);
-  const classifiedTotal = useMemo(
+  // Colaboradores com pelo menos um tipo (cada pessoa conta uma única vez).
+  const collaboratorsWithType = useMemo(
+    () =>
+      filtered.filter(
+        (position) =>
+          position.status === "occupied" &&
+          (position.personName ?? "").trim() &&
+          collaboratorTypeIdsOf(position).length > 0,
+      ).length,
+    [filtered],
+  );
+  // Soma total das associações (uma pessoa com vários tipos conta em cada um).
+  const typeAssociationsTotal = useMemo(
     () => Array.from(typeCounts.values()).reduce((sum, count) => sum + count, 0),
+    [typeCounts],
+  );
+  // Tipos que possuem pelo menos um colaborador no recorte filtrado.
+  const typesInScope = useMemo(
+    () => Array.from(typeCounts.values()).filter((count) => count > 0).length,
     [typeCounts],
   );
   const byPosition = useMemo(() => computePositionQuantities(filtered), [filtered]);
@@ -131,14 +148,16 @@ function QuantitativosPage() {
     areaFilter !== "all" || cargoFilter !== "all" || statusFilter !== "all" || typeFilter.length > 0;
 
   const indicators = [
-    { label: "Total de cargos", value: stats.total },
-    { label: "Posições ocupadas", value: stats.occupied },
-    { label: "Cargos vagos", value: stats.vacant },
-    { label: "Colaboradores", value: collaborators },
-    { label: "Áreas", value: stats.areas },
-    { label: "Tipos ativos", value: activeTypes },
-    { label: "Colaboradores classificados por tipo", value: classifiedTotal },
-    { label: "Registros sem superior", value: stats.withoutSuperior },
+    { label: "Total de cargos", value: stats.total, scope: "recorte" },
+    { label: "Posições ocupadas", value: stats.occupied, scope: "recorte" },
+    { label: "Cargos vagos", value: stats.vacant, scope: "recorte" },
+    { label: "Colaboradores", value: collaborators, scope: "recorte" },
+    { label: "Áreas", value: stats.areas, scope: "recorte" },
+    { label: "Tipos ativos cadastrados", value: activeTypes, scope: "global" },
+    { label: "Tipos encontrados no recorte", value: typesInScope, scope: "recorte" },
+    { label: "Colaboradores com tipo", value: collaboratorsWithType, scope: "recorte" },
+    { label: "Associações com tipos", value: typeAssociationsTotal, scope: "recorte" },
+    { label: "Registros sem superior", value: stats.withoutSuperior, scope: "recorte" },
   ];
 
   function indicatorRows(): unknown[][] {
@@ -271,12 +290,15 @@ function QuantitativosPage() {
         <TypeMultiFilter types={collaboratorTypes} selected={typeFilter} onChange={setTypeFilter} />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {indicators.map((item) => (
           <Card key={item.label}>
             <CardContent className="p-4">
               <p className="text-2xl font-extrabold tabular-nums text-foreground">{item.value}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">{item.label}</p>
+              <p className="mt-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+                {item.scope === "global" ? "Base completa" : "Respeita os filtros"}
+              </p>
             </CardContent>
           </Card>
         ))}
