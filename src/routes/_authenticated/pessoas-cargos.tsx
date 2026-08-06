@@ -19,7 +19,17 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -39,6 +49,7 @@ import {
   buildPositionIndex,
   collaboratorTypeIdsOf,
   connectionTypeLabel,
+  getDescendantIds,
   listAreas,
   positionDisplayName,
   safePositions,
@@ -84,7 +95,8 @@ function statusBadgeClass(status: OrganizationPosition["status"]): string {
 }
 
 function PeoplePositionsPage() {
-  const { positions, collaboratorTypes, isLoading, deletePosition } = useOrganization();
+  const { positions, collaboratorTypes, isLoading, deletePosition, deactivatePosition } =
+    useOrganization();
   const { q } = Route.useSearch();
 
   const [search, setSearch] = useState(q ?? "");
