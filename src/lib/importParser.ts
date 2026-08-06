@@ -1,6 +1,5 @@
 import * as XLSX from "xlsx";
 
-import { categorizePositions } from "@/lib/organization";
 import { normalizeHexColor } from "@/lib/positionColor";
 import type {
   ChildrenLayout,
@@ -218,7 +217,7 @@ export async function parseOrganizationFile(
   // Resolve superiorId somente quando o ID existe na base importada.
   const idByLegacy = new Map(positions.map((p) => [p.legacyId, p.id]));
   let missingSuperior = 0;
-  let missingRequired = 0;
+  let selfReferences = 0;
   for (const position of positions) {
     const superiorLegacy = pendingSuperior.get(position.id);
     if (superiorLegacy === undefined) {
@@ -230,15 +229,12 @@ export async function parseOrganizationFile(
       position.superiorId = resolved;
     } else {
       if (!resolved) orphanSuperior += 1;
+      else selfReferences += 1; // superior apontando para o próprio registro = ciclo
       position.superiorId = null;
-      missingSuperior += 1;
     }
-    if (!position.positionTitle || !position.area) missingRequired += 1;
   }
-  // missingRequired precisa contar também registros sem superior já contados acima
-  missingRequired = positions.filter((p) => !p.positionTitle || !p.area).length;
-
-  const { orphans } = categorizePositions(positions);
+  // Campos obrigatórios vazios (cargo ou área), contados sobre todos os registros.
+  const missingRequired = positions.filter((p) => !p.positionTitle || !p.area).length;
 
   const report: ImportReport = {
     sheetName,
@@ -248,7 +244,7 @@ export async function parseOrganizationFile(
     duplicateIds,
     missingRequired,
     orphanSuperior,
-    cycleCount: orphans.length,
+    cycleCount: countCyclicPositions(positions) + selfReferences,
     unknownTypes: unknownTypeNames.size,
   };
 

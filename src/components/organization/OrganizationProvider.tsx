@@ -433,6 +433,13 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
         toast.error("Informe o nome do tipo de colaborador.");
         return false;
       }
+      const duplicated = collaboratorTypes.some(
+        (type) => type.id !== id && normalizeTypeName(type.name) === normalizeTypeName(name),
+      );
+      if (duplicated) {
+        toast.error("Já existe outro tipo de colaborador com este nome.");
+        return false;
+      }
       const updated: CollaboratorType = {
         ...current,
         name,
