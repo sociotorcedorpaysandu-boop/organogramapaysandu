@@ -192,6 +192,23 @@ function PeoplePositionsPage() {
     setPanelOpen(true);
   }
 
+  function confirmDelete() {
+    if (!deleting) return;
+    if (deletingChildren.length === 0) {
+      deletePosition(deleting.id);
+    } else if (subChoice === "parent") {
+      deletePosition(deleting.id, { subordinates: "parent" });
+    } else if (subChoice === "custom") {
+      deletePosition(deleting.id, {
+        subordinates: "custom",
+        customSuperiorId: customSuperiorId || null,
+      });
+    } else {
+      deletePosition(deleting.id, { subordinates: "none" });
+    }
+    setDeleting(null);
+  }
+
   if (isLoading) return <PageSkeleton />;
 
   return (
