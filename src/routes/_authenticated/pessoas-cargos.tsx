@@ -109,6 +109,8 @@ function PeoplePositionsPage() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [editing, setEditing] = useState<OrganizationPosition | null>(null);
   const [deleting, setDeleting] = useState<OrganizationPosition | null>(null);
+  const [subChoice, setSubChoice] = useState<"parent" | "custom" | "none">("parent");
+  const [customSuperiorId, setCustomSuperiorId] = useState("");
 
   useEffect(() => {
     if (q) setSearch(q);
