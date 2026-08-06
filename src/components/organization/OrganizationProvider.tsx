@@ -94,6 +94,19 @@ function occupantName(position: OrganizationPosition): string {
   return (position.personName ?? "").trim() || position.positionTitle || "O colaborador";
 }
 
+/**
+ * Normaliza nomes de tipos para comparação: ignora maiúsculas/minúsculas,
+ * acentos e espaços duplicados.
+ */
+function normalizeTypeName(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("pt-BR");
+}
+
 /** Cores atribuídas em ciclo aos tipos criados automaticamente na importação. */
 const IMPORT_TYPE_COLORS = ["#38bdf8", "#16a34a", "#d97706", "#7c3aed", "#f97316", "#64748b"];
 

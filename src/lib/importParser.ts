@@ -86,6 +86,32 @@ function splitTypeNames(value: unknown): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Detecção específica de ciclos hierárquicos: conta os registros cuja cadeia
+ * de superiores retorna a um registro já visitado. Superiores inexistentes
+ * interrompem a cadeia e NÃO são contados como ciclo.
+ */
+function countCyclicPositions(positions: OrganizationPosition[]): number {
+  const index = new Map(positions.map((p) => [p.id, p]));
+  let cyclic = 0;
+  for (const position of positions) {
+    if (!position.superiorId || !index.has(position.superiorId)) continue;
+    const seen = new Set<string>([position.id]);
+    let current: string | null = position.superiorId;
+    let steps = 0;
+    while (current && steps <= positions.length) {
+      if (seen.has(current)) {
+        cyclic += 1;
+        break;
+      }
+      seen.add(current);
+      current = index.get(current)?.superiorId ?? null;
+      steps += 1;
+    }
+  }
+  return cyclic;
+}
+
 export async function parseOrganizationFile(
   file: File,
   collaboratorTypes: CollaboratorType[] = [],
