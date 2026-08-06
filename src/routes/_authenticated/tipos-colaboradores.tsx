@@ -143,8 +143,9 @@ function CollaboratorTypesPage() {
             Tipos de colaboradores
           </h2>
           <p className="text-sm text-muted-foreground">
-            {collaboratorTypes.length} tipo(s) cadastrado(s). Os tipos pertencem à pessoa, não ao
-            cargo, e são preservados na troca de cargo.
+            {collaboratorTypes.length} tipo(s) cadastrado(s). Os tipos classificam o ocupante atual
+            do cargo. Na substituição do ocupante, a foto e as classificações anteriores são
+            removidas.
           </p>
         </div>
         <Button onClick={openCreate}>
