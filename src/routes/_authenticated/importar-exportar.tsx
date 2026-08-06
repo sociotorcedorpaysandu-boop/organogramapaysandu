@@ -127,7 +127,7 @@ function ImportExportPage() {
         { label: "IDs duplicados", value: parsed.report.duplicateIds },
         { label: "Campos obrigatórios vazios", value: parsed.report.missingRequired },
         { label: "Superior inexistente", value: parsed.report.orphanSuperior },
-        { label: "Possíveis ciclos", value: parsed.report.cycleCount },
+        { label: "Ciclos hierárquicos", value: parsed.report.cycleCount },
         { label: "Tipos sem cadastro", value: parsed.report.unknownTypes },
       ]
     : [];
