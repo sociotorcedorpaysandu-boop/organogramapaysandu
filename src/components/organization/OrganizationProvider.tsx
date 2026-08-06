@@ -302,23 +302,51 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
   );
 
   const deletePosition = useCallback(
-    (id: string) => {
+    (id: string, options?: DeletePositionOptions) => {
       const list = safePositions(positions);
       const current = list.find((p) => p.id === id);
       if (!current) return;
       const descendants = getDescendantIds(id, list);
-      // Subordinados diretos passam a ficar sem superior definido, sem quebrar a árvore.
+      const directChildren = list.filter((p) => p.superiorId === id).length;
+
+      // Destino dos subordinados diretos (padrão: ficam sem superior definido).
+      let targetSuperior: string | null = null;
+      if (options?.subordinates === "parent") {
+        targetSuperior = current.superiorId;
+      } else if (options?.subordinates === "custom") {
+        const candidate = options.customSuperiorId ?? null;
+        // Evita ciclo: ignora o próprio cargo, subordinados ou IDs inexistentes.
+        if (
+          candidate &&
+          candidate !== id &&
+          !descendants.has(candidate) &&
+          list.some((p) => p.id === candidate)
+        ) {
+          targetSuperior = candidate;
+        }
+      }
+
       const next = list
         .filter((p) => p.id !== id)
         .map((p) =>
           p.superiorId === id
-            ? { ...p, superiorId: null, updatedAt: new Date().toISOString() }
+            ? { ...p, superiorId: targetSuperior, updatedAt: new Date().toISOString() }
             : p,
         );
       persist(next);
+
+      let subordinatesNote = "";
+      if (directChildren > 0) {
+        if (targetSuperior) {
+          const target = list.find((p) => p.id === targetSuperior);
+          subordinatesNote = ` (${directChildren} subordinado(s) transferidos para ${target ? describe(target) : "outro superior"})`;
+        } else {
+          subordinatesNote = ` (${directChildren} subordinado(s) mantidos sem superior)`;
+        }
+      }
       logChange(
         "delete",
-        `Cargo excluído: ${describe(current)}${descendants.size > 0 ? ` (${descendants.size} subordinado(s) mantidos sem superior)` : ""}`,
+        `Cargo excluído: ${describe(current)}${subordinatesNote}`,
         id,
         current,
         undefined,
