@@ -1,4 +1,4 @@
-import { Link, useRouter } from "@tanstack/react-router";
+import { Link, useRouter, type ErrorComponentProps } from "@tanstack/react-router";
 import { AlertTriangle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 /**
  * ErrorBoundary visual das páginas internas. Nunca exibe detalhes técnicos.
  */
-export function PageError({ error, reset }: { error: Error; reset: () => void }) {
+export function PageError({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
   console.error(error);
 
