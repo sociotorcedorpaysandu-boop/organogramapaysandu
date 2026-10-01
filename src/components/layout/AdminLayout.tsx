@@ -15,6 +15,8 @@ import {
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 
 import escudoAsset from "@/assets/escudo-paysandu.png.asset.json";
+import { HelpCenter } from "@/components/help/HelpCenter";
+import { PageHelpActions } from "@/components/help/PageHelpActions";
 import { useOrganization } from "@/components/organization/OrganizationProvider";
 import { Button } from "@/components/ui/button";
 import {
@@ -166,6 +168,8 @@ export function AdminLayout({ children }: { children: ReactNode }) {
 
             <h1 className="text-lg font-semibold tracking-tight text-foreground">{title}</h1>
 
+            <PageHelpActions pathname={pathname} />
+
             <div className="ml-auto flex items-center gap-4">
               <form onSubmit={handleGlobalSearch} className="relative hidden md:block">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -217,6 +221,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
         </header>
 
         <main className="flex-1 px-4 py-6 sm:px-6">{children}</main>
+        <HelpCenter />
       </div>
     </div>
   );
