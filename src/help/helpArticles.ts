@@ -169,6 +169,46 @@ export const HELP_ARTICLES: HelpArticle[] = [
     route: "/importar-exportar",
     actionLabel: "Ir para Importar e exportar",
   },
+  {
+    id: "filtro-cargo",
+    title: "Como filtrar por cargo?",
+    keywords: ["filtro", "cargo", "função", "título"],
+    questions: ["mostrar só um cargo", "filtrar cargo"],
+    answer:
+      "No Organograma, use o filtro “Todos os cargos” e escolha um cargo da lista. Ele combina com área, status, nível e tipos. Volte para “Todos os cargos” para limpar.",
+    route: "/organograma",
+    actionLabel: "Ir para o Organograma",
+  },
+  {
+    id: "filtro-nivel",
+    title: "Como filtrar por nível hierárquico?",
+    keywords: ["nível", "nivel", "hierárquico", "diretoria", "gerência", "coordenação", "presidência"],
+    questions: ["mostrar só diretores", "filtrar gerentes"],
+    answer:
+      "No Organograma, use o filtro “Todos os níveis”. O nível é definido pelo título do cargo: Presidência, Vice-presidência, Diretoria, Gerência, Coordenação, Supervisão, Assessoria, Operacional ou Outros.",
+    route: "/organograma",
+    actionLabel: "Ir para o Organograma",
+  },
+  {
+    id: "cores-automaticas",
+    title: "O que significam as cores dos cartões?",
+    keywords: ["cor", "cores", "laranja", "verde", "preto", "pcd", "voluntário", "diretoria"],
+    questions: ["cartão laranja", "cartão verde", "cartão preto"],
+    answer:
+      "Laranja: colaborador PCD. Verde: Voluntário. Preto: cargos de Diretor/Diretora/Diretoria. Se a pessoa for PCD e Voluntária, vale o laranja (os dois tipos continuam visíveis). Nos demais, aparece a cor definida no cargo.",
+    route: "/organograma",
+    actionLabel: "Ir para o Organograma",
+  },
+  {
+    id: "layouts",
+    title: "Qual a diferença entre Horizontal, Vertical e Automático?",
+    keywords: ["layout", "horizontal", "vertical", "automático", "subordinados"],
+    questions: ["como organizar subordinados", "layout automático"],
+    answer:
+      "Horizontal: subordinados diretos lado a lado. Vertical: subordinados diretos em coluna. Automático: horizontal com poucos subordinados e vertical a partir de 5. Mudar o layout não altera quem é superior de quem. Defina na edição do responsável.",
+    route: "/organograma",
+    actionLabel: "Ir para o Organograma",
+  },
 ];
 
 export function normalizeText(value: string): string {
