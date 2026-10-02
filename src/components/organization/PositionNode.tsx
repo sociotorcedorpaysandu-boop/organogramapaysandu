@@ -12,6 +12,7 @@ import {
 import { personInitials } from "@/lib/photo";
 import { collaboratorTypeIcon } from "@/lib/typeIcons";
 import { cn } from "@/lib/utils";
+import { cardAccentColor } from "@/lib/hierarchyLevel";
 import type { DisplayMode, OrganizationPosition } from "@/types/organization";
 
 /** Indicador visual de um tipo de colaborador exibido no cartão. */
@@ -41,8 +42,8 @@ export interface PositionNodeData extends Record<string, unknown> {
 
 export type PositionFlowNode = Node<PositionNodeData, "position">;
 
-export const NODE_WIDTH = 250;
-export const NODE_HEIGHT = 140;
+export const NODE_WIDTH = 280;
+export const NODE_HEIGHT = 156;
 
 function PersonAvatar({ position, size }: { position: OrganizationPosition; size: string }) {
   const photo = (position.photoUrl ?? "").trim();
@@ -63,27 +64,32 @@ export function PositionNode({ data }: NodeProps<PositionFlowNode>) {
   const person = (position.personName ?? "").trim();
   const showTitle = displayMode !== "name";
   const showPerson = displayMode !== "title";
-  const positionColor = (position.positionColor ?? "").trim();
+  const positionColor = cardAccentColor(
+    position.positionTitle ?? "",
+    isVacant ? [] : data.typeBadges.map((b) => b.name),
+    position.positionColor ?? "",
+  );
   const badges = data.showTypeBadges ? data.typeBadges : [];
 
   return (
     <div
       className={cn(
-        "relative rounded-lg border bg-card px-3.5 py-3 text-left shadow-sm transition-opacity",
-        "w-[250px] min-h-[118px]",
+        "relative rounded-lg border bg-card px-4 py-3.5 text-left shadow-sm transition-opacity",
+        "w-[280px] min-h-[130px]",
         displayMode !== "title-name" && "flex flex-col justify-center",
         isVacant && "border-dashed border-muted-foreground/50 bg-muted/40",
         isInactive && "opacity-60",
         highlighted && "ring-2 ring-primary border-primary",
         dimmed && "opacity-35",
       )}
+      style={positionColor ? { borderLeft: `4px solid ${positionColor}` } : undefined}
       title={position.tooltip || undefined}
     >
-      {/* Faixa superior opcional na cor de identificação do cargo */}
+      {/* Faixa superior de identificação (automática ou configurada) */}
       {positionColor ? (
         <span
           aria-hidden
-          className="print-exact absolute inset-x-0 top-0 h-[5px] rounded-t-lg"
+          className="print-exact absolute inset-x-0 top-0 h-[7px] rounded-t-lg"
           style={{ backgroundColor: positionColor }}
         />
       ) : null}
@@ -92,7 +98,7 @@ export function PositionNode({ data }: NodeProps<PositionFlowNode>) {
 
       <div className="flex items-start justify-between gap-2">
         {showTitle ? (
-          <p className="text-[13px] font-bold uppercase leading-snug tracking-wide text-foreground">
+          <p className="text-[15px] font-extrabold uppercase leading-snug tracking-wide text-foreground">
             {position.positionTitle || "Cargo não definido"}
           </p>
         ) : (

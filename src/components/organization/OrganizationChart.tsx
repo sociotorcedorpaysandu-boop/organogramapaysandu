@@ -50,6 +50,7 @@ import {
   safePositions,
 } from "@/lib/organization";
 import { cn } from "@/lib/utils";
+import { HIERARCHY_LEVELS, hierarchyLevelOf } from "@/lib/hierarchyLevel";
 import { getDisplayMode, saveDisplayMode } from "@/services/organizationStorageService";
 import type { DisplayMode, OrganizationPosition } from "@/types/organization";
 import { useOrganization } from "@/components/organization/OrganizationProvider";
@@ -114,6 +115,8 @@ function ChartInner({
   const [search, setSearch] = useState("");
   const [areaFilter, setAreaFilter] = useState<string>(initialArea ?? "all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [titleFilter, setTitleFilter] = useState<string>("all");
+  const [levelFilter, setLevelFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set());
   const [typeFilterMode, setTypeFilterMode] = useState<TypeFilterMode>("highlight");
   const [showTypeBadges, setShowTypeBadges] = useState(true);
@@ -144,6 +147,13 @@ function ChartInner({
 
   const list = safePositions(positions);
   const areas = useMemo(() => listAreas(list), [list]);
+  const titles = useMemo(
+    () =>
+      Array.from(new Set(list.map((p) => (p.positionTitle ?? "").trim()).filter(Boolean))).sort((a, b) =>
+        a.localeCompare(b, "pt-BR"),
+      ),
+    [list],
+  );
   const hasEmptyArea = useMemo(() => list.some((p) => !(p.area ?? "").trim()), [list]);
 
   const typeIndex = useMemo(() => {
@@ -218,7 +228,8 @@ function ChartInner({
   const { nodes, edges, signature } = useMemo(() => {
     const { orphanIds } = categorized;
     const index = new Map(list.map((p) => [p.id, p]));
-    const filtering = areaFilter !== "all" || statusFilter !== "all";
+    const filtering =
+      areaFilter !== "all" || statusFilter !== "all" || titleFilter !== "all" || levelFilter !== "all";
     const typeFiltering = typeFilter.size > 0;
 
     const matchesFilter = (p: OrganizationPosition) => {
@@ -230,6 +241,8 @@ function ChartInner({
         }
       }
       if (statusFilter !== "all" && p.status !== statusFilter) return false;
+      if (titleFilter !== "all" && (p.positionTitle ?? "").trim() !== titleFilter) return false;
+      if (levelFilter !== "all" && hierarchyLevelOf(p.positionTitle ?? "") !== levelFilter) return false;
       return true;
     };
 
@@ -354,16 +367,23 @@ function ChartInner({
       if (laidOut) node.position = laidOut;
     }
 
-    const sig = `${flowNodes.length}:${flowEdges.length}:${areaFilter}:${statusFilter}:${displayMode}:${typeFilterMode}:${Array.from(typeFilter).sort().join("|")}:${showTypeBadges}:${Array.from(collapsed).join(",")}`;
+    const sig = `${flowNodes.length}:${flowEdges.length}:${areaFilter}:${statusFilter}:${titleFilter}:${levelFilter}:${displayMode}:${typeFilterMode}:${Array.from(typeFilter).sort().join("|")}:${showTypeBadges}:${Array.from(collapsed).join(",")}`;
     return { nodes: flowNodes, edges: flowEdges, signature: sig };
-  }, [categorized, list, areaFilter, statusFilter, typeFilter, typeFilterMode, showTypeBadges, displayMode, collapsed, matchIds, search, badgesOf, toggleCollapse, onEdit, onOpenProfile, onMarkVacant, onDeactivate]);
+  }, [categorized, list, areaFilter, statusFilter, titleFilter, levelFilter, typeFilter, typeFilterMode, showTypeBadges, displayMode, collapsed, matchIds, search, badgesOf, toggleCollapse, onEdit, onOpenProfile, onMarkVacant, onDeactivate]);
+
+  // Enquadramento inicial: limita o zoom mínimo para que os cartões continuem
+  // legíveis; o restante pode ser navegado arrastando o canvas.
+  const fitChart = useCallback(
+    (duration = 250) => {
+      reactFlow.fitView({ padding: 0.08, duration, maxZoom: 1, minZoom: 0.45 });
+    },
+    [reactFlow],
+  );
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      reactFlow.fitView({ padding: 0.15, duration: 250, maxZoom: 1 });
-    }, 50);
+    const timer = window.setTimeout(() => fitChart(), 50);
     return () => window.clearTimeout(timer);
-  }, [signature, reactFlow]);
+  }, [signature, fitChart]);
 
   function expandAll() {
     setCollapsed(new Set());
@@ -472,6 +492,35 @@ function ChartInner({
           </SelectContent>
         </Select>
 
+        <Select value={titleFilter} onValueChange={setTitleFilter}>
+          <SelectTrigger className="w-52" aria-label="Filtrar por cargo">
+            <SelectValue placeholder="Todos os cargos" />
+          </SelectTrigger>
+          <SelectContent className="max-h-72">
+            <SelectItem value="all">Todos os cargos</SelectItem>
+            {titles.map((title) => (
+              <SelectItem key={title} value={title}>
+                {title}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={levelFilter} onValueChange={setLevelFilter}>
+          <SelectTrigger className="w-48" aria-label="Filtrar por nível hierárquico">
+            <SelectValue placeholder="Todos os níveis" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os níveis</SelectItem>
+            {HIERARCHY_LEVELS.map((level) => (
+              <SelectItem key={level} value={level}>
+                {level}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+
         {/* Filtro por tipo de colaborador (qualquer tipo selecionado) */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -574,7 +623,7 @@ function ChartInner({
           <Button
             variant="outline"
             size="icon"
-            onClick={() => reactFlow.fitView({ padding: 0.15, duration: 250 })}
+            onClick={() => fitChart()}
             aria-label="Centralizar organograma"
           >
             <Crosshair className="h-4 w-4" />
@@ -625,7 +674,7 @@ function ChartInner({
         ref={fullscreenRef}
         className={cn(
           "overflow-hidden rounded-lg border bg-card",
-          isPrinting ? "h-[700px] w-[1040px] max-w-full" : "h-[68vh] min-h-[420px]",
+          isPrinting ? "h-[700px] w-[1040px] max-w-full" : "h-[80vh] min-h-[520px]",
         )}
       >
         <ReactFlow
