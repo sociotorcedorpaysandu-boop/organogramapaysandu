@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Keep collaborator-type name matching centralized in `normalizeTypeName` so creation and imports share identical rules.

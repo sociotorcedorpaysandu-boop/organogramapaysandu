@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 
 import { normalizeHexColor } from "@/lib/positionColor";
+import { normalizeTypeName } from "@/lib/organization";
 import type {
   ChildrenLayout,
   CollaboratorType,
@@ -173,7 +174,7 @@ export async function parseOrganizationFile(
   const pendingSuperior = new Map<string, number>();
   const typeIdByName = new Map<string, string>();
   for (const type of collaboratorTypes) {
-    typeIdByName.set(type.name.trim().toLocaleLowerCase("pt-BR"), type.id);
+    typeIdByName.set(normalizeTypeName(type.name), type.id);
   }
   const typeNamesByPositionId = new Map<string, string[]>();
   const unknownTypeNames = new Set<string>();
@@ -209,7 +210,7 @@ export async function parseOrganizationFile(
     if (col.tipos >= 0 && !isVacant) {
       const unknownForRow: string[] = [];
       for (const name of splitTypeNames(row[col.tipos])) {
-        const typeId = typeIdByName.get(name.toLocaleLowerCase("pt-BR"));
+        const typeId = typeIdByName.get(normalizeTypeName(name));
         if (typeId) {
           if (!typeIds.includes(typeId)) typeIds.push(typeId);
         } else {

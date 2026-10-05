@@ -7,6 +7,16 @@ import type {
 
 export const MAX_HIERARCHY_DEPTH = 1000;
 
+/** Normaliza nomes de tipos para comparações sem alterar o valor exibido. */
+export function normalizeTypeName(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("pt-BR");
+}
+
 export function safePositions(value: unknown): OrganizationPosition[] {
   return Array.isArray(value) ? (value as OrganizationPosition[]) : [];
 }

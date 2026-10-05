@@ -26,7 +26,7 @@ import {
   parseOrganizationFile,
   type ParsedImport,
 } from "@/lib/importParser";
-import { formatDateTime, safePositions } from "@/lib/organization";
+import { formatDateTime, normalizeTypeName, safePositions } from "@/lib/organization";
 
 export const Route = createFileRoute("/_authenticated/importar-exportar")({
   head: () => ({
@@ -100,7 +100,7 @@ function ImportExportPage() {
       const names = parsed.typeNamesByPositionId.get(position.id);
       if (!names || names.length === 0) return position;
       const extraIds = names
-        .map((name) => nameToId[name.trim().toLocaleLowerCase("pt-BR")])
+        .map((name) => nameToId[normalizeTypeName(name)])
         .filter((id): id is string => Boolean(id));
       if (extraIds.length === 0) return position;
       return {

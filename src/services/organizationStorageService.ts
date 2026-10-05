@@ -171,7 +171,7 @@ const DEFAULT_COLLABORATOR_TYPES: Array<{
   color: string;
   icon: string;
 }> = [
-  { name: "PCD", description: "Pessoa com deficiência", color: "#7c3aed", icon: "accessibility" },
+  { name: "PCD", description: "Pessoa com deficiência", color: "#f97316", icon: "accessibility" },
   { name: "Voluntário", description: "Atuação voluntária no clube", color: "#16a34a", icon: "heart-handshake" },
   { name: "Estagiário", description: "Vínculo de estágio", color: "#d97706", icon: "graduation-cap" },
   { name: "Terceirizado", description: "Empresa terceirizada", color: "#64748b", icon: "briefcase" },
