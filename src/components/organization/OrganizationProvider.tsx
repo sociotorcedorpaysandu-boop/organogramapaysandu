@@ -20,6 +20,7 @@ import {
   newPositionId,
   positionDisplayName,
   safePositions,
+  normalizeTypeName,
 } from "@/lib/organization";
 import * as storage from "@/services/organizationStorageService";
 import type {
@@ -103,19 +104,6 @@ function describe(position: OrganizationPosition): string {
 
 function occupantName(position: OrganizationPosition): string {
   return (position.personName ?? "").trim() || position.positionTitle || "O colaborador";
-}
-
-/**
- * Normaliza nomes de tipos para comparação: ignora maiúsculas/minúsculas,
- * acentos e espaços duplicados.
- */
-function normalizeTypeName(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .trim()
-    .replace(/\s+/g, " ")
-    .toLocaleLowerCase("pt-BR");
 }
 
 /** Cores atribuídas em ciclo aos tipos criados automaticamente na importação. */
@@ -451,7 +439,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
         return null;
       }
       const duplicated = collaboratorTypes.some(
-        (type) => type.name.trim().toLocaleLowerCase("pt-BR") === name.toLocaleLowerCase("pt-BR"),
+        (type) => normalizeTypeName(type.name) === normalizeTypeName(name),
       );
       if (duplicated) {
         toast.error("Já existe um tipo de colaborador com este nome.");
@@ -553,11 +541,11 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       for (const raw of names) {
         const name = raw.trim();
         if (!name) continue;
-        const key = name.toLocaleLowerCase("pt-BR");
+        const key = normalizeTypeName(name);
         if (seen.has(key)) continue;
         seen.add(key);
         const existing = collaboratorTypes.find(
-          (type) => type.name.trim().toLocaleLowerCase("pt-BR") === key,
+          (type) => normalizeTypeName(type.name) === key,
         );
         if (existing) map[key] = existing.id;
         else missing.push(name);
@@ -576,7 +564,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
         }));
         persistTypes([...collaboratorTypes, ...created]);
         for (const type of created) {
-          map[type.name.trim().toLocaleLowerCase("pt-BR")] = type.id;
+          map[normalizeTypeName(type.name)] = type.id;
           logChange(
             "create",
             `Tipo de colaborador criado pela importação: ${type.name}`,

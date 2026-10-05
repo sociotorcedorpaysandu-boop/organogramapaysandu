@@ -163,11 +163,6 @@ function LoginPage() {
               </Button>
             </form>
 
-            <div className="mt-6 rounded-md border border-dashed bg-muted/50 px-3 py-2.5 text-xs text-muted-foreground">
-              <p className="font-semibold text-foreground/80">Credenciais demonstrativas</p>
-              <p className="mt-1">E-mail: {DEMO_EMAIL}</p>
-              <p>Senha: {DEMO_PASSWORD}</p>
-            </div>
           </div>
         </div>
       </main>

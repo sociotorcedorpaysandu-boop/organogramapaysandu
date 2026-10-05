@@ -98,7 +98,7 @@ export function PositionNode({ data }: NodeProps<PositionFlowNode>) {
 
       <div className="flex items-start justify-between gap-2">
         {showTitle ? (
-          <p className="text-[15px] font-extrabold uppercase leading-snug tracking-wide text-foreground">
+          <p className="text-[16px] font-extrabold uppercase leading-snug tracking-wide text-foreground">
             {position.positionTitle || "Cargo não definido"}
           </p>
         ) : (
